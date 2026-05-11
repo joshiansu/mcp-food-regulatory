@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 from mcp_food_regulatory.models import Market, ClaimStatus
 from mcp_food_regulatory.sources.codex import CodexSource
 from mcp_food_regulatory.sources.eu import EUSource
+from mcp_food_regulatory.sources.ph_fda import PhFDASource
 
 
 @pytest.fixture
@@ -27,6 +28,11 @@ def codex(http_client):
 @pytest.fixture
 def eu(http_client):
     return EUSource(http_client)
+
+
+@pytest.fixture
+def ph(http_client):
+    return PhFDASource(http_client)
 
 
 # ------------------------------------------------------------------ #
@@ -214,3 +220,99 @@ class TestServerTools:
         from mcp_food_regulatory.server import get_market_overview
         result = await get_market_overview("mars")
         assert "error" in result
+
+
+# ------------------------------------------------------------------ #
+#  Philippines FDA tests                                              #
+# ------------------------------------------------------------------ #
+
+class TestPHFDASource:
+
+    @pytest.mark.asyncio
+    async def test_market_is_ph(self, ph):
+        assert ph.market == Market.PH
+
+    @pytest.mark.asyncio
+    async def test_search_vitamin_d_permitted(self, ph):
+        results = await ph.search_health_claims("vitamin d")
+        assert len(results) >= 1
+        assert any(r.status == ClaimStatus.PERMITTED for r in results)
+        assert any(r.claim_type == "nutrient_function" for r in results)
+
+    @pytest.mark.asyncio
+    async def test_search_moringa_conditional(self, ph):
+        results = await ph.search_health_claims("moringa")
+        assert len(results) >= 1
+        assert any(r.status == ClaimStatus.CONDITIONAL for r in results)
+
+    @pytest.mark.asyncio
+    async def test_search_malunggay_alias(self, ph):
+        # malunggay is the local name -- alias lookup must work
+        results = await ph.search_health_claims("malunggay")
+        assert len(results) >= 1
+        assert any(r.status == ClaimStatus.CONDITIONAL for r in results)
+
+    @pytest.mark.asyncio
+    async def test_search_inulin_not_defined(self, ph):
+        results = await ph.search_health_claims("inulin")
+        assert len(results) >= 1
+        assert any(r.status == ClaimStatus.NOT_DEFINED for r in results)
+
+    @pytest.mark.asyncio
+    async def test_search_caffeine_not_defined(self, ph):
+        results = await ph.search_health_claims("caffeine")
+        assert len(results) >= 1
+        assert any(r.status == ClaimStatus.NOT_DEFINED for r in results)
+
+    @pytest.mark.asyncio
+    async def test_partial_string_does_not_match(self, ph):
+        # "cal" must NOT match calcium -- no bidirectional substring matching
+        results = await ph.search_health_claims("cal")
+        assert all(r.status == ClaimStatus.NOT_DEFINED for r in results)
+
+    @pytest.mark.asyncio
+    async def test_claim_type_filter_exact_match(self, ph):
+        # claim_type="nutrient" must NOT match "nutrient_function"
+        results = await ph.search_health_claims("vitamin d", claim_type="nutrient")
+        # Should return nothing (or NOT_DEFINED fallback) since no entry has claim_type="nutrient"
+        assert all(r.status == ClaimStatus.NOT_DEFINED for r in results)
+
+    @pytest.mark.asyncio
+    async def test_get_standard_circular_2014_007(self, ph):
+        standard = await ph.get_standard("FDA Circular 2014-007")
+        assert standard is not None
+        assert standard.market == Market.PH
+        assert "Health" in standard.title or "Nutrient" in standard.title
+        assert standard.key_definitions is not None
+
+    @pytest.mark.asyncio
+    async def test_get_standard_ra_3720(self, ph):
+        standard = await ph.get_standard("Republic Act 3720")
+        assert standard is not None
+        assert standard.market == Market.PH
+
+    @pytest.mark.asyncio
+    async def test_get_standard_unknown_returns_none(self, ph):
+        result = await ph.get_standard("PH 999-9999-UNKNOWN")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_search_standards_returns_list(self, ph):
+        # seeded fallback must work even if live fetch fails
+        results = await ph.search_standards("health claims")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_market_overview(self, ph):
+        overview = await ph.get_market_overview()
+        assert overview.market == Market.PH
+        assert "FDA" in overview.authority_name
+        assert len(overview.key_legislation) >= 3
+
+    @pytest.mark.asyncio
+    async def test_unknown_ingredient_no_crash(self, ph):
+        results = await ph.search_health_claims("xylobiose_fictional_ingredient_xyz")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+        assert results[0].status == ClaimStatus.NOT_DEFINED

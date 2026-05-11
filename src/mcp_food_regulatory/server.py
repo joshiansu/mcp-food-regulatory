@@ -22,6 +22,7 @@ from fastmcp import FastMCP
 from mcp_food_regulatory.models import Market
 from mcp_food_regulatory.sources.codex import CodexSource
 from mcp_food_regulatory.sources.eu import EUSource
+from mcp_food_regulatory.sources.ph_fda import PhFDASource
 
 # ------------------------------------------------------------------ #
 #  Server init                                                        #
@@ -33,7 +34,7 @@ mcp = FastMCP(
         "This server provides access to food regulatory databases across global markets. "
         "Use it to check health claim status, look up regulatory standards, compare "
         "claim permissions across markets, and get market regulatory overviews. "
-        "Supported markets: codex (Codex Alimentarius), eu (European Union). "
+        "Supported markets: codex (Codex Alimentarius), eu (European Union), ph (Philippines FDA). "
         "More ASEAN markets coming — see README for contribution guide."
     ),
 )
@@ -61,6 +62,7 @@ def _get_client() -> httpx.AsyncClient:
 SOURCES = {
     Market.CODEX: CodexSource,
     Market.EU: EUSource,
+    Market.PH: PhFDASource,
 }
 
 def _get_source(market: Market):
@@ -320,10 +322,10 @@ async def list_markets() -> dict:
     implemented = {
         "codex": "Codex Alimentarius Commission (FAO/WHO)",
         "eu": "European Commission / EFSA",
+        "ph": "Philippines Food and Drug Administration (FDA)",
     }
     planned = {
         "au": "Food Standards Australia New Zealand (FSANZ)",
-        "ph": "Philippines FDA",
         "my": "Malaysia Ministry of Health",
         "vn": "Vietnam Ministry of Health",
         "id": "Indonesia BPOM",
