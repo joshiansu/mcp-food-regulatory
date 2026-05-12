@@ -13,6 +13,7 @@ from mcp_food_regulatory.models import Market, ClaimStatus
 from mcp_food_regulatory.sources.codex import CodexSource
 from mcp_food_regulatory.sources.eu import EUSource
 from mcp_food_regulatory.sources.ph_fda import PhFDASource
+from mcp_food_regulatory.sources.jp_caa import JPCAASource
 
 
 @pytest.fixture
@@ -33,6 +34,11 @@ def eu(http_client):
 @pytest.fixture
 def ph(http_client):
     return PhFDASource(http_client)
+
+
+@pytest.fixture
+def jp(http_client):
+    return JPCAASource(http_client)
 
 
 # ------------------------------------------------------------------ #
@@ -316,3 +322,63 @@ class TestPHFDASource:
         assert isinstance(results, list)
         assert len(results) >= 1
         assert results[0].status == ClaimStatus.NOT_DEFINED
+
+
+# ------------------------------------------------------------------ #
+#  Japan CAA tests                                                    #
+# ------------------------------------------------------------------ #
+
+class TestJPCAASource:
+
+    @pytest.mark.asyncio
+    async def test_market_is_jp(self, jp):
+        assert jp.market == Market.JP
+
+    @pytest.mark.asyncio
+    async def test_search_vitamin_d_permitted(self, jp):
+        results = await jp.search_health_claims("vitamin d")
+        assert len(results) >= 1
+        assert any(r.status == ClaimStatus.PERMITTED for r in results)
+        assert any(r.claim_type == "nutrient_function" for r in results)
+
+    @pytest.mark.asyncio
+    async def test_search_calcium_permitted(self, jp):
+        results = await jp.search_health_claims("calcium")
+        assert len(results) >= 1
+        assert any(r.status == ClaimStatus.PERMITTED for r in results)
+
+    @pytest.mark.asyncio
+    async def test_search_unknown_not_defined(self, jp):
+        results = await jp.search_health_claims("xylobiose_fictional_xyz")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+        assert results[0].status == ClaimStatus.NOT_DEFINED
+
+    @pytest.mark.asyncio
+    async def test_get_standard_health_promotion_act(self, jp):
+        standard = await jp.get_standard("Health Promotion Act 2002")
+        assert standard is not None
+        assert standard.market == Market.JP
+
+    @pytest.mark.asyncio
+    async def test_get_standard_unknown_returns_none(self, jp):
+        assert await jp.get_standard("JP 999-UNKNOWN") is None
+
+    @pytest.mark.asyncio
+    async def test_search_standards_returns_list(self, jp):
+        results = await jp.search_standards("health")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_market_overview(self, jp):
+        overview = await jp.get_market_overview()
+        assert overview.market == Market.JP
+        assert "CAA" in overview.authority_name or "Consumer" in overview.authority_name
+        assert len(overview.key_legislation) >= 2
+
+    @pytest.mark.asyncio
+    async def test_two_calls_no_crash(self, jp):
+        r1 = await jp.search_health_claims("calcium")
+        r2 = await jp.search_health_claims("calcium")
+        assert len(r1) == len(r2)
