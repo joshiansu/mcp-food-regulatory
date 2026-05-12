@@ -14,6 +14,7 @@ from mcp_food_regulatory.sources.codex import CodexSource
 from mcp_food_regulatory.sources.eu import EUSource
 from mcp_food_regulatory.sources.ph_fda import PhFDASource
 from mcp_food_regulatory.sources.jp_caa import JPCAASource
+from mcp_food_regulatory.sources.us_fda import USFDASource
 
 
 @pytest.fixture
@@ -39,6 +40,11 @@ def ph(http_client):
 @pytest.fixture
 def jp(http_client):
     return JPCAASource(http_client)
+
+
+@pytest.fixture
+def us(http_client):
+    return USFDASource(http_client)
 
 
 # ------------------------------------------------------------------ #
@@ -381,4 +387,62 @@ class TestJPCAASource:
     async def test_two_calls_no_crash(self, jp):
         r1 = await jp.search_health_claims("calcium")
         r2 = await jp.search_health_claims("calcium")
+        assert len(r1) == len(r2)
+
+
+# ------------------------------------------------------------------ #
+#  US FDA tests                                                       #
+# ------------------------------------------------------------------ #
+
+class TestUSFDASource:
+
+    @pytest.mark.asyncio
+    async def test_market_is_us(self, us):
+        assert us.market == Market.US
+
+    @pytest.mark.asyncio
+    async def test_search_calcium_returns_results(self, us):
+        results = await us.search_health_claims("calcium")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_search_folic_acid_returns_results(self, us):
+        results = await us.search_health_claims("folic acid")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_search_unknown_not_defined(self, us):
+        results = await us.search_health_claims("xylobiose_fictional_xyz")
+        assert len(results) >= 1
+        assert results[0].status == ClaimStatus.NOT_DEFINED
+
+    @pytest.mark.asyncio
+    async def test_get_standard_21_cfr(self, us):
+        standard = await us.get_standard("21 CFR Part 101")
+        assert standard is not None
+        assert standard.market == Market.US
+
+    @pytest.mark.asyncio
+    async def test_get_standard_unknown_returns_none(self, us):
+        assert await us.get_standard("US 999-UNKNOWN") is None
+
+    @pytest.mark.asyncio
+    async def test_search_standards_returns_list(self, us):
+        results = await us.search_standards("labeling")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_market_overview(self, us):
+        overview = await us.get_market_overview()
+        assert overview.market == Market.US
+        assert "FDA" in overview.authority_name
+        assert len(overview.key_legislation) >= 2
+
+    @pytest.mark.asyncio
+    async def test_two_calls_no_crash(self, us):
+        r1 = await us.search_health_claims("calcium")
+        r2 = await us.search_health_claims("calcium")
         assert len(r1) == len(r2)
