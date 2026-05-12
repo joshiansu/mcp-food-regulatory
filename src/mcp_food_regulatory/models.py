@@ -22,6 +22,9 @@ class Market(str, Enum):
     EU = "eu"
     AU = "au"       # Australia / FSANZ
     NZ = "nz"       # New Zealand / FSANZ
+    US = "us"       # United States
+    JP = "jp"       # Japan
+    CA = "ca"       # Canada
     PH = "ph"       # Philippines
     MY = "my"       # Malaysia
     VN = "vn"       # Vietnam
