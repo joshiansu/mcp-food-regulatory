@@ -15,6 +15,8 @@ from mcp_food_regulatory.sources.eu import EUSource
 from mcp_food_regulatory.sources.ph_fda import PhFDASource
 from mcp_food_regulatory.sources.jp_caa import JPCAASource
 from mcp_food_regulatory.sources.us_fda import USFDASource
+from mcp_food_regulatory.sources.ca_health_canada import CAHealthCanadaSource
+from mcp_food_regulatory.sources.au_fsanz import AUFSANZSource
 
 
 @pytest.fixture
@@ -45,6 +47,16 @@ def jp(http_client):
 @pytest.fixture
 def us(http_client):
     return USFDASource(http_client)
+
+
+@pytest.fixture
+def ca(http_client):
+    return CAHealthCanadaSource(http_client)
+
+
+@pytest.fixture
+def au(http_client):
+    return AUFSANZSource(http_client)
 
 
 # ------------------------------------------------------------------ #
@@ -445,4 +457,121 @@ class TestUSFDASource:
     async def test_two_calls_no_crash(self, us):
         r1 = await us.search_health_claims("calcium")
         r2 = await us.search_health_claims("calcium")
+        assert len(r1) == len(r2)
+
+
+# ------------------------------------------------------------------ #
+#  Canada Health Canada tests                                         #
+# ------------------------------------------------------------------ #
+
+class TestCAHealthCanadaSource:
+
+    @pytest.mark.asyncio
+    async def test_market_is_ca(self, ca):
+        assert ca.market == Market.CA
+
+    @pytest.mark.asyncio
+    async def test_search_calcium_returns_results(self, ca):
+        results = await ca.search_health_claims("calcium")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_search_vitamin_c_returns_results(self, ca):
+        results = await ca.search_health_claims("vitamin c")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_search_unknown_not_defined(self, ca):
+        results = await ca.search_health_claims("xylobiose_fictional_xyz")
+        assert len(results) >= 1
+        assert results[0].status == ClaimStatus.NOT_DEFINED
+
+    @pytest.mark.asyncio
+    async def test_get_standard_fdr_b01603(self, ca):
+        standard = await ca.get_standard("FDR B.01.603")
+        assert standard is not None
+        assert standard.market == Market.CA
+
+    @pytest.mark.asyncio
+    async def test_get_standard_unknown_returns_none(self, ca):
+        assert await ca.get_standard("CA 999-UNKNOWN") is None
+
+    @pytest.mark.asyncio
+    async def test_search_standards_returns_list(self, ca):
+        results = await ca.search_standards("health claims")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_market_overview(self, ca):
+        overview = await ca.get_market_overview()
+        assert overview.market == Market.CA
+        assert "Health Canada" in overview.authority_name
+        assert len(overview.key_legislation) >= 2
+
+    @pytest.mark.asyncio
+    async def test_two_calls_no_crash(self, ca):
+        r1 = await ca.search_health_claims("vitamin c")
+        r2 = await ca.search_health_claims("vitamin c")
+        assert len(r1) == len(r2)
+
+
+# ------------------------------------------------------------------ #
+#  Australia FSANZ tests                                              #
+# ------------------------------------------------------------------ #
+
+class TestAUFSANZSource:
+
+    @pytest.mark.asyncio
+    async def test_market_is_au(self, au):
+        assert au.market == Market.AU
+
+    @pytest.mark.asyncio
+    async def test_search_calcium_returns_results(self, au):
+        results = await au.search_health_claims("calcium")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_search_folate_returns_results(self, au):
+        results = await au.search_health_claims("folate")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_search_unknown_not_defined(self, au):
+        results = await au.search_health_claims("xylobiose_fictional_xyz")
+        assert len(results) >= 1
+        assert results[0].status == ClaimStatus.NOT_DEFINED
+
+    @pytest.mark.asyncio
+    async def test_get_standard_127(self, au):
+        standard = await au.get_standard("Standard 1.2.7")
+        assert standard is not None
+        assert standard.market == Market.AU
+        assert standard.key_definitions is not None
+
+    @pytest.mark.asyncio
+    async def test_get_standard_unknown_returns_none(self, au):
+        assert await au.get_standard("AU 999-UNKNOWN") is None
+
+    @pytest.mark.asyncio
+    async def test_search_standards_returns_list(self, au):
+        results = await au.search_standards("nutrition")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_market_overview(self, au):
+        overview = await au.get_market_overview()
+        assert overview.market == Market.AU
+        assert "FSANZ" in overview.authority_name
+        assert len(overview.key_legislation) >= 2
+
+    @pytest.mark.asyncio
+    async def test_two_calls_no_crash(self, au):
+        r1 = await au.search_health_claims("calcium")
+        r2 = await au.search_health_claims("calcium")
         assert len(r1) == len(r2)

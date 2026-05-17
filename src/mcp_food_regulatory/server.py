@@ -23,6 +23,10 @@ from mcp_food_regulatory.models import Market
 from mcp_food_regulatory.sources.codex import CodexSource
 from mcp_food_regulatory.sources.eu import EUSource
 from mcp_food_regulatory.sources.ph_fda import PhFDASource
+from mcp_food_regulatory.sources.jp_caa import JPCAASource
+from mcp_food_regulatory.sources.us_fda import USFDASource
+from mcp_food_regulatory.sources.ca_health_canada import CAHealthCanadaSource
+from mcp_food_regulatory.sources.au_fsanz import AUFSANZSource
 
 # ------------------------------------------------------------------ #
 #  Server init                                                        #
@@ -34,8 +38,9 @@ mcp = FastMCP(
         "This server provides access to food regulatory databases across global markets. "
         "Use it to check health claim status, look up regulatory standards, compare "
         "claim permissions across markets, and get market regulatory overviews. "
-        "Supported markets: codex (Codex Alimentarius), eu (European Union), ph (Philippines FDA). "
-        "More ASEAN markets coming — see README for contribution guide."
+        "Supported markets: codex (Codex Alimentarius), eu (European Union), "
+        "ph (Philippines FDA), jp (Japan CAA), us (US FDA), ca (Health Canada), au (FSANZ). "
+        "More markets coming — see README for contribution guide."
     ),
 )
 
@@ -63,6 +68,10 @@ SOURCES = {
     Market.CODEX: CodexSource,
     Market.EU: EUSource,
     Market.PH: PhFDASource,
+    Market.JP: JPCAASource,
+    Market.US: USFDASource,
+    Market.CA: CAHealthCanadaSource,
+    Market.AU: AUFSANZSource,
 }
 
 def _get_source(market: Market):
@@ -323,9 +332,22 @@ async def list_markets() -> dict:
         "codex": "Codex Alimentarius Commission (FAO/WHO)",
         "eu": "European Commission / EFSA",
         "ph": "Philippines Food and Drug Administration (FDA)",
+        "jp": "Consumer Affairs Agency Japan (CAA)",
+        "us": "Food and Drug Administration (US FDA)",
+        "ca": "Health Canada / CFIA",
+        "au": "Food Standards Australia New Zealand (FSANZ)",
     }
     planned = {
-        "au": "Food Standards Australia New Zealand (FSANZ)",
+        "br": "Brazil ANVISA",
+        "kr": "Korea Ministry of Food and Drug Safety (MFDS)",
+        "sa": "Saudi Food and Drug Authority (SFDA)",
+        "in": "Food Safety and Standards Authority of India (FSSAI)",
+        "cn": "National Health Commission / SAMR (China)",
+        "co": "INVIMA (Colombia)",
+        "cl": "MINSAL / ISP (Chile)",
+        "mx": "COFEPRIS (Mexico)",
+        "ae": "ESMA / Dubai Municipality (UAE)",
+        "za": "Department of Health (South Africa)",
         "my": "Malaysia Ministry of Health",
         "vn": "Vietnam Ministry of Health",
         "id": "Indonesia BPOM",
