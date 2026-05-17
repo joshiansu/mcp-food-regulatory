@@ -85,6 +85,48 @@ def _get_source(market: Market):
     return cls(_get_client())
 
 
+_PREVIEW_LEN = 180
+
+def _extract_refs(items: list) -> list[dict]:
+    """Build a deduplicated reference list from ClaimResult / Standard objects.
+
+    Each entry has: label, url, preview (short excerpt), cite (markdown link).
+    """
+    seen: set[str] = set()
+    refs: list[dict] = []
+
+    def _add(label: str, url: str | None, preview: str | None) -> None:
+        if not url or url in seen:
+            return
+        seen.add(url)
+        snippet = (preview or "").strip()
+        if len(snippet) > _PREVIEW_LEN:
+            snippet = snippet[:_PREVIEW_LEN].rstrip() + "..."
+        refs.append({
+            "label": label,
+            "url": url,
+            "preview": snippet or None,
+            "cite": f"[{label}]({url})",
+        })
+
+    for item in items:
+        # ClaimResult
+        if hasattr(item, "basis") and item.basis:
+            b = item.basis
+            article_suffix = f", {b.article}" if b.article else ""
+            label = f"{b.instrument}{article_suffix}"
+            url = b.url or getattr(item, "source_url", None)
+            preview = getattr(item, "conditions", None)
+            _add(label, url, preview)
+
+        # Standard
+        if hasattr(item, "full_text_url"):
+            label = f"{item.standard_id} — {item.title}"
+            _add(label, item.full_text_url, getattr(item, "summary", None))
+
+    return refs
+
+
 # ------------------------------------------------------------------ #
 #  Tools                                                              #
 # ------------------------------------------------------------------ #
@@ -115,6 +157,7 @@ async def search_health_claims(
     """
     results = {}
     errors = {}
+    all_claims = []
 
     for market_str in markets:
         try:
@@ -126,6 +169,7 @@ async def search_health_claims(
         try:
             source = _get_source(market)
             claims = await source.search_health_claims(ingredient, claim_type)
+            all_claims.extend(claims)
             results[market_str] = [c.model_dump() for c in claims]
         except NotImplementedError as e:
             errors[market_str] = str(e)
@@ -136,6 +180,7 @@ async def search_health_claims(
         "ingredient": ingredient,
         "claim_type_filter": claim_type,
         "results": results,
+        "references": _extract_refs(all_claims),
         "errors": errors if errors else None,
     }
 
@@ -179,7 +224,7 @@ async def get_standard(
                     "Check the ID format or search_standards() for a keyword search."
                 ),
             }
-        return {"found": True, **standard.model_dump()}
+        return {"found": True, **standard.model_dump(), "references": _extract_refs([standard])}
     except Exception as e:
         return {"error": str(e)}
 
@@ -206,19 +251,21 @@ async def search_standards(
         search_standards("health claims", ["eu"])
     """
     results = {}
+    all_standards = []
 
     for market_str in markets:
         try:
             market = Market(market_str.lower())
             source = _get_source(market)
             standards = await source.search_standards(query)
+            all_standards.extend(standards)
             results[market_str] = [s.model_dump() for s in standards]
         except (ValueError, NotImplementedError) as e:
             results[market_str] = {"error": str(e)}
         except Exception as e:
             results[market_str] = {"error": f"Search failed: {e}"}
 
-    return {"query": query, "results": results}
+    return {"query": query, "results": results, "references": _extract_refs(all_standards)}
 
 
 @mcp.tool
@@ -286,6 +333,7 @@ async def compare_markets(
         "claim_type": claim_type,
         "comparison": [r.model_dump() for r in all_results],
         "summary": " | ".join(summary_lines) or "No data found.",
+        "references": _extract_refs(all_results),
         "errors": errors if errors else None,
     }
 
@@ -309,7 +357,17 @@ async def get_market_overview(market: str) -> dict:
         market_enum = Market(market.lower())
         source = _get_source(market_enum)
         overview = await source.get_market_overview()
-        return overview.model_dump()
+        refs = []
+        if overview.authority_url:
+            refs.append({
+                "label": overview.authority_name,
+                "url": overview.authority_url,
+                "preview": overview.health_claims_framework[:_PREVIEW_LEN].rstrip() + "..."
+                    if overview.health_claims_framework and len(overview.health_claims_framework) > _PREVIEW_LEN
+                    else overview.health_claims_framework,
+                "cite": f"[{overview.authority_name}]({overview.authority_url})",
+            })
+        return {**overview.model_dump(), "references": refs}
     except ValueError:
         return {
             "error": f"Unknown market '{market}'.",
