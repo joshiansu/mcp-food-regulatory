@@ -16,6 +16,12 @@ Run with:
 
 from __future__ import annotations
 from typing import Optional
+import asyncio
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
 import httpx
 from fastmcp import FastMCP
 
@@ -83,6 +89,77 @@ def _get_source(market: Market):
             "See README.md to contribute a new market connector."
         )
     return cls(_get_client())
+
+
+# ------------------------------------------------------------------ #
+#  Call logging -- JSONL + Supabase                                   #
+# ------------------------------------------------------------------ #
+
+_LOG_PATH = Path.home() / ".mcp-food-regulatory" / "history.jsonl"
+
+# Lazy Supabase singleton -- None if env vars are absent
+_supabase = None
+
+def _get_supabase():
+    global _supabase
+    if _supabase is not None:
+        return _supabase
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    if not url or not key:
+        return None
+    from supabase import create_client  # imported lazily -- optional dep
+    _supabase = create_client(url, key)
+    return _supabase
+
+
+def _summarise_result(result: dict) -> dict:
+    s: dict = {}
+    if "error" in result and result["error"]:
+        s["error"] = str(result["error"])[:200]
+    if "references" in result:
+        s["ref_count"] = len(result["references"])
+    if "results" in result and isinstance(result["results"], dict):
+        s["market_counts"] = {
+            k: len(v) if isinstance(v, list) else 1
+            for k, v in result["results"].items()
+        }
+    if "comparison" in result:
+        s["comparison_count"] = len(result["comparison"])
+    if "summary" in result and isinstance(result["summary"], str):
+        s["outcome"] = result["summary"][:300]
+    return s
+
+
+def _write_log(record: dict) -> None:
+    """Synchronous worker -- runs in a thread via asyncio.to_thread."""
+    try:
+        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _LOG_PATH.open("a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+
+    try:
+        sb = _get_supabase()
+        if sb:
+            sb.table("tool_calls").insert(record).execute()
+    except Exception:
+        pass
+
+
+async def _log_call(tool: str, args: dict, result: dict) -> None:
+    record = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "tool": tool,
+        "args": args,
+        "ingredient": args.get("ingredient"),
+        "markets": args.get("markets") or (
+            [args["market"]] if args.get("market") else None
+        ),
+        "summary": _summarise_result(result),
+    }
+    await asyncio.to_thread(_write_log, record)
 
 
 _PREVIEW_LEN = 180
@@ -176,13 +253,19 @@ async def search_health_claims(
         except Exception as e:
             errors[market_str] = f"Error fetching data: {e}"
 
-    return {
+    out = {
         "ingredient": ingredient,
         "claim_type_filter": claim_type,
         "results": results,
         "references": _extract_refs(all_claims),
         "errors": errors if errors else None,
     }
+    asyncio.create_task(_log_call(
+        "search_health_claims",
+        {"ingredient": ingredient, "markets": markets, "claim_type": claim_type},
+        out,
+    ))
+    return out
 
 
 @mcp.tool
@@ -224,7 +307,13 @@ async def get_standard(
                     "Check the ID format or search_standards() for a keyword search."
                 ),
             }
-        return {"found": True, **standard.model_dump(), "references": _extract_refs([standard])}
+        out = {"found": True, **standard.model_dump(), "references": _extract_refs([standard])}
+        asyncio.create_task(_log_call(
+            "get_standard",
+            {"standard_id": standard_id, "market": market},
+            out,
+        ))
+        return out
     except Exception as e:
         return {"error": str(e)}
 
@@ -265,7 +354,13 @@ async def search_standards(
         except Exception as e:
             results[market_str] = {"error": f"Search failed: {e}"}
 
-    return {"query": query, "results": results, "references": _extract_refs(all_standards)}
+    out = {"query": query, "results": results, "references": _extract_refs(all_standards)}
+    asyncio.create_task(_log_call(
+        "search_standards",
+        {"query": query, "markets": markets},
+        out,
+    ))
+    return out
 
 
 @mcp.tool
@@ -328,7 +423,7 @@ async def compare_markets(
     if errors:
         summary_lines.append(f"Data unavailable for: {', '.join(errors.keys()).upper()}")
 
-    return {
+    out = {
         "ingredient": ingredient,
         "claim_type": claim_type,
         "comparison": [r.model_dump() for r in all_results],
@@ -336,6 +431,12 @@ async def compare_markets(
         "references": _extract_refs(all_results),
         "errors": errors if errors else None,
     }
+    asyncio.create_task(_log_call(
+        "compare_markets",
+        {"ingredient": ingredient, "claim_type": claim_type, "markets": markets},
+        out,
+    ))
+    return out
 
 
 @mcp.tool
@@ -367,7 +468,13 @@ async def get_market_overview(market: str) -> dict:
                     else overview.health_claims_framework,
                 "cite": f"[{overview.authority_name}]({overview.authority_url})",
             })
-        return {**overview.model_dump(), "references": refs}
+        out = {**overview.model_dump(), "references": refs}
+        asyncio.create_task(_log_call(
+            "get_market_overview",
+            {"market": market},
+            out,
+        ))
+        return out
     except ValueError:
         return {
             "error": f"Unknown market '{market}'.",
