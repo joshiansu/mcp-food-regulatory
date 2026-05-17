@@ -279,6 +279,36 @@
     .code-val   { color: #f9e4a0; }
     .code-punc  { color: #6b8f75; }
 
+    /* ── CONNECTOR TABS ──────────────────────────────────────── */
+    .connector-tabs {
+      display: flex; gap: 0; flex-wrap: wrap;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 32px;
+    }
+    .ctab {
+      display: flex; align-items: center; gap: 7px;
+      padding: 11px 18px;
+      font-size: 13px; font-weight: 500;
+      color: var(--text-2);
+      background: none; border: none; cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: color 0.18s, border-color 0.18s;
+      white-space: nowrap;
+    }
+    .ctab:hover { color: var(--primary); }
+    .ctab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+    .ctab-icon { font-size: 15px; }
+    .ctab-panel { display: none; }
+    .ctab-panel.active { display: block; }
+    .connector-note {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-3);
+      background: var(--surface-tint); border: 1px solid var(--border);
+      padding: 5px 12px; border-radius: 20px;
+      margin-bottom: 24px;
+    }
+
     /* ── EXAMPLES ────────────────────────────────────────────── */
     .examples { background: var(--surface); }
     .ex-list { display: flex; flex-direction: column; gap: 20px; }
@@ -533,40 +563,256 @@
         <div class="section-label">The solution</div>
         <h2 class="section-title">Connect once, ask anything</h2>
         <p class="section-sub">
-          Food Regulatory MCP plugs directly into Claude and other AI assistants.
+          Works with Claude, Cursor, Windsurf, Cline, and any MCP-compatible AI app.
           Add it in 2 minutes — no coding required.
         </p>
       </div>
-      <div class="steps">
-        <div class="step reveal reveal-delay-1">
-          <div class="step-num">1</div>
-          <div class="step-body">
-            <h4>Open Claude Desktop settings</h4>
-            <p>Go to <strong>Settings → Developer → Edit Config</strong>. This opens a JSON file.</p>
+
+      <!-- Connector tabs -->
+      <div class="connector-tabs reveal">
+        <button class="ctab active" data-ctab="claude"><span class="ctab-icon">🤖</span> Claude Desktop</button>
+        <button class="ctab" data-ctab="cursor"><span class="ctab-icon">⚡</span> Cursor</button>
+        <button class="ctab" data-ctab="windsurf"><span class="ctab-icon">🌊</span> Windsurf</button>
+        <button class="ctab" data-ctab="cline"><span class="ctab-icon">💻</span> Cline</button>
+        <button class="ctab" data-ctab="copilot"><span class="ctab-icon">🐙</span> GitHub Copilot</button>
+        <button class="ctab" data-ctab="openai"><span class="ctab-icon">✨</span> ChatGPT &amp; Others</button>
+        <button class="ctab" data-ctab="other"><span class="ctab-icon">🔌</span> Any MCP App</button>
+      </div>
+
+      <!-- Claude Desktop -->
+      <div class="ctab-panel active" id="ctab-claude">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>Open Claude Desktop settings</h4>
+              <p>Go to <strong>Settings → Developer → Edit Config</strong>. This opens a JSON file in your editor.</p>
+            </div>
           </div>
-        </div>
-        <div class="step reveal reveal-delay-2">
-          <div class="step-num">2</div>
-          <div class="step-body">
-            <h4>Paste the server URL</h4>
-            <p>Add this to your config file and save:</p>
-            <div class="code-block"><span class="code-punc">{</span>
-  <span class="code-key">"mcpServers"</span><span class="code-punc">:</span> <span class="code-punc">{</span>
-    <span class="code-key">"food-regulatory"</span><span class="code-punc">:</span> <span class="code-punc">{</span>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>Paste the server config</h4>
+              <p>Add this block and save the file:</p>
+              <div class="code-block"><span class="code-punc">{</span>
+  <span class="code-key">"mcpServers"</span><span class="code-punc">: {</span>
+    <span class="code-key">"food-regulatory"</span><span class="code-punc">: {</span>
       <span class="code-key">"url"</span><span class="code-punc">:</span> <span class="code-val">"https://mcp-food-regulatory.vercel.app/mcp"</span>
     <span class="code-punc">}</span>
   <span class="code-punc">}</span>
 <span class="code-punc">}</span></div>
+            </div>
           </div>
-        </div>
-        <div class="step reveal reveal-delay-3">
-          <div class="step-num">3</div>
-          <div class="step-body">
-            <h4>Restart Claude and start asking</h4>
-            <p>That's it. Ask Claude about any ingredient, market, or health claim — in plain English, no special commands.</p>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>Restart Claude and start asking</h4>
+              <p>Ask Claude about any ingredient, market, or health claim in plain English — no special commands needed.</p>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Cursor -->
+      <div class="ctab-panel" id="ctab-cursor">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>Open Cursor's MCP settings</h4>
+              <p>Go to <strong>Cursor Settings → Tools &amp; Integrations → MCP Servers</strong>, or open the file <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">~/.cursor/mcp.json</code> directly.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>Add the server</h4>
+              <p>Paste this into your <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">mcp.json</code> and save:</p>
+              <div class="code-block"><span class="code-punc">{</span>
+  <span class="code-key">"mcpServers"</span><span class="code-punc">: {</span>
+    <span class="code-key">"food-regulatory"</span><span class="code-punc">: {</span>
+      <span class="code-key">"url"</span><span class="code-punc">:</span> <span class="code-val">"https://mcp-food-regulatory.vercel.app/mcp"</span>
+    <span class="code-punc">}</span>
+  <span class="code-punc">}</span>
+<span class="code-punc">}</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>Reload and use in chat</h4>
+              <p>Restart Cursor. In the chat panel, the food-regulatory tools will appear automatically. Ask about any ingredient or market.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Windsurf -->
+      <div class="ctab-panel" id="ctab-windsurf">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>Open Windsurf MCP settings</h4>
+              <p>Click the <strong>Settings gear → MCP Servers</strong> tab, or edit <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">~/.codeium/windsurf/mcp_config.json</code> directly.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>Add the server</h4>
+              <p>Paste this config and save:</p>
+              <div class="code-block"><span class="code-punc">{</span>
+  <span class="code-key">"mcpServers"</span><span class="code-punc">: {</span>
+    <span class="code-key">"food-regulatory"</span><span class="code-punc">: {</span>
+      <span class="code-key">"url"</span><span class="code-punc">:</span> <span class="code-val">"https://mcp-food-regulatory.vercel.app/mcp"</span>
+    <span class="code-punc">}</span>
+  <span class="code-punc">}</span>
+<span class="code-punc">}</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>Use via Cascade</h4>
+              <p>Open the Cascade panel and ask any food regulatory question. Windsurf will call the tools automatically.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cline -->
+      <div class="ctab-panel" id="ctab-cline">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>Install Cline from VS Code Marketplace</h4>
+              <p>Search for <strong>Cline</strong> in the VS Code Extensions panel and install it. Cline is a free, open-source AI coding assistant with full MCP support.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>Add the MCP server</h4>
+              <p>Open the Cline sidebar → click <strong>MCP Servers → + Add</strong> and enter the URL, or paste this into Cline's MCP config:</p>
+              <div class="code-block"><span class="code-punc">{</span>
+  <span class="code-key">"mcpServers"</span><span class="code-punc">: {</span>
+    <span class="code-key">"food-regulatory"</span><span class="code-punc">: {</span>
+      <span class="code-key">"url"</span><span class="code-punc">:</span> <span class="code-val">"https://mcp-food-regulatory.vercel.app/mcp"</span>
+    <span class="code-punc">}</span>
+  <span class="code-punc">}</span>
+<span class="code-punc">}</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>Ask from inside VS Code</h4>
+              <p>Open the Cline chat panel and ask any health claim question. Cline will invoke the regulatory tools directly in your editor context.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GitHub Copilot -->
+      <div class="ctab-panel" id="ctab-copilot">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>Create a workspace MCP config</h4>
+              <p>In your VS Code workspace root, create a file at <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">.vscode/mcp.json</code>. For a global config, add it to your VS Code user settings.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>Add the server</h4>
+              <p>VS Code uses a <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">"servers"</code> key (not "mcpServers"). Paste this:</p>
+              <div class="code-block"><span class="code-punc">{</span>
+  <span class="code-key">"servers"</span><span class="code-punc">: {</span>
+    <span class="code-key">"food-regulatory"</span><span class="code-punc">: {</span>
+      <span class="code-key">"url"</span><span class="code-punc">:</span> <span class="code-val">"https://mcp-food-regulatory.vercel.app/mcp"</span>
+    <span class="code-punc">}</span>
+  <span class="code-punc">}</span>
+<span class="code-punc">}</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>Use in Copilot Chat</h4>
+              <p>Open <strong>GitHub Copilot Chat</strong> in VS Code and switch to <strong>Agent mode</strong>. The food-regulatory tools will be available automatically. Ask about any health claim or market.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ChatGPT / OpenAI / Perplexity / Grok -->
+      <div class="ctab-panel" id="ctab-openai">
+        <span class="connector-note">ℹ️ ChatGPT, Perplexity, and Grok do not yet support MCP natively — here are your options</span>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">A</div>
+            <div class="step-body">
+              <h4>ChatGPT — Create a Custom GPT with Actions</h4>
+              <p>In ChatGPT, go to <strong>Explore GPTs → Create → Configure → Add Actions</strong>. Paste the MCP endpoint URL and describe the tools. This lets your Custom GPT call the regulatory API directly. Requires a ChatGPT Plus or Team plan.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">B</div>
+            <div class="step-body">
+              <h4>Perplexity &amp; Grok — Use an MCP bridge</h4>
+              <p>Neither Perplexity nor Grok currently supports MCP connections. You can use a community bridge like <strong>mcp-proxy</strong> to expose the tools via a local REST API, then integrate that API via any supported plugin/function mechanism those platforms offer.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">C</div>
+            <div class="step-body">
+              <h4>OpenAI API — Function calling</h4>
+              <p>If you're building with the OpenAI API, use <strong>function calling</strong>. Define the regulatory tools as functions in your API request and call <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">https://mcp-food-regulatory.vercel.app/mcp</code> when the model requests them. See the <a href="https://github.com/joshiansu/mcp-food-regulatory" style="color:var(--primary)">GitHub README</a> for the full tool schema.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Any MCP App -->
+      <div class="ctab-panel" id="ctab-other">
+        <span class="connector-note">🔌 For developers and custom integrations</span>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>Use the MCP endpoint directly</h4>
+              <p>The server follows the <strong>MCP streamable-http</strong> transport spec. Any compliant client can connect using this URL:</p>
+              <div class="code-block"><span class="code-val">https://mcp-food-regulatory.vercel.app/mcp</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>Standard JSON config</h4>
+              <p>Most MCP clients (including Zed, Continue, custom agents) use the same config format:</p>
+              <div class="code-block"><span class="code-punc">{</span>
+  <span class="code-key">"mcpServers"</span><span class="code-punc">: {</span>
+    <span class="code-key">"food-regulatory"</span><span class="code-punc">: {</span>
+      <span class="code-key">"url"</span><span class="code-punc">:</span> <span class="code-val">"https://mcp-food-regulatory.vercel.app/mcp"</span>
+    <span class="code-punc">}</span>
+  <span class="code-punc">}</span>
+<span class="code-punc">}</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>Available tools</h4>
+              <p>The server exposes 6 tools: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">search_health_claims</code>, <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">get_standard</code>, <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">search_standards</code>, <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">compare_markets</code>, <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">get_market_overview</code>, and <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">list_markets</code>. See the <a href="https://github.com/joshiansu/mcp-food-regulatory" style="color:var(--primary)">GitHub README</a> for full schema docs.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -728,6 +974,16 @@
   </footer>
 
   <script>
+    // Connector tab switching
+    document.querySelectorAll('.ctab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.ctab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.ctab-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('ctab-' + tab.dataset.ctab).classList.add('active');
+      });
+    });
+
     // Scroll-reveal
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
