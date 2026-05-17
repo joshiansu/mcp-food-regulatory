@@ -298,7 +298,13 @@
     }
     .ctab:hover { color: var(--primary); }
     .ctab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
-    .ctab-icon { font-size: 15px; }
+    .ctab-logo {
+      width: 15px; height: 15px; flex-shrink: 0;
+      opacity: 0.4; filter: grayscale(1);
+      transition: opacity 0.18s, filter 0.18s;
+    }
+    .ctab.active .ctab-logo { opacity: 1; filter: none; }
+    .ctab:hover .ctab-logo { opacity: 0.75; filter: grayscale(0.2); }
     .ctab-panel { display: none; }
     .ctab-panel.active { display: block; }
     .connector-note {
@@ -570,13 +576,13 @@
 
       <!-- Connector tabs -->
       <div class="connector-tabs reveal">
-        <button class="ctab active" data-ctab="claude"><span class="ctab-icon">🤖</span> Claude Desktop</button>
-        <button class="ctab" data-ctab="cursor"><span class="ctab-icon">⚡</span> Cursor</button>
-        <button class="ctab" data-ctab="windsurf"><span class="ctab-icon">🌊</span> Windsurf</button>
-        <button class="ctab" data-ctab="cline"><span class="ctab-icon">💻</span> Cline</button>
-        <button class="ctab" data-ctab="copilot"><span class="ctab-icon">🐙</span> GitHub Copilot</button>
-        <button class="ctab" data-ctab="openai"><span class="ctab-icon">✨</span> ChatGPT &amp; Others</button>
-        <button class="ctab" data-ctab="other"><span class="ctab-icon">🔌</span> Any MCP App</button>
+        <button class="ctab active" data-ctab="claude"><img class="ctab-logo" src="https://cdn.simpleicons.org/anthropic" alt="Anthropic" width="15" height="15" onerror="this.style.display='none'"> Claude Desktop</button>
+        <button class="ctab" data-ctab="cursor"><img class="ctab-logo" src="https://cdn.simpleicons.org/cursor" alt="Cursor" width="15" height="15" onerror="this.style.display='none'"> Cursor</button>
+        <button class="ctab" data-ctab="windsurf"><img class="ctab-logo" src="https://cdn.simpleicons.org/codeium" alt="Windsurf" width="15" height="15" onerror="this.style.display='none'"> Windsurf</button>
+        <button class="ctab" data-ctab="cline"> Cline</button>
+        <button class="ctab" data-ctab="copilot"><img class="ctab-logo" src="https://cdn.simpleicons.org/github" alt="GitHub" width="15" height="15" onerror="this.style.display='none'"> GitHub Copilot</button>
+        <button class="ctab" data-ctab="openai"><img class="ctab-logo" src="https://cdn.simpleicons.org/openai" alt="OpenAI" width="15" height="15" onerror="this.style.display='none'"> ChatGPT &amp; Others</button>
+        <button class="ctab" data-ctab="other"> Any MCP App</button>
       </div>
 
       <!-- Claude Desktop -->
