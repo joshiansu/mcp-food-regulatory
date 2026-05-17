@@ -1,6 +1,5 @@
 {
-  "routes": [
-    { "src": "/mcp", "dest": "/api/index" },
-    { "handle": "filesystem" }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
   ]
 }
