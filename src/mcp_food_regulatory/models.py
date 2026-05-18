@@ -33,6 +33,16 @@ class Market(str, Enum):
     GB = "gb"       # Great Britain (post-Brexit)
     NG = "ng"       # Nigeria
     GH = "gh"       # Ghana
+    IN = "in"       # India / FSSAI
+    CN = "cn"       # China / NHC + SAMR
+    KR = "kr"       # South Korea / MFDS
+    BR = "br"       # Brazil / ANVISA
+    CO = "co"       # Colombia / INVIMA
+    CL = "cl"       # Chile / MINSAL
+    MX = "mx"       # Mexico / COFEPRIS
+    AE = "ae"       # UAE / ESMA
+    SA = "sa"       # Saudi Arabia / SFDA
+    ZA = "za"       # South Africa / DoH
 
 
 class RegulatoryBasis(BaseModel):

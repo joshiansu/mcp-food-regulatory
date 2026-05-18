@@ -13,5 +13,6 @@ MCP server for food regulatory data. FastMCP + Python 3.10+.
 - Add markets by copying `sources/template.py` and registering in `SOURCES` dict in server.py
 
 ## Current status
-Batch 1 complete: Codex, EU, PH, JP, US, CA, AU implemented.
-Next batch (Batch 2): br_anvisa.py, kr_mfds.py, sa_sfda.py
+All Excel markets implemented: codex, eu, ph, jp, us, ca, au (batch 1) +
+in, cn, kr, br, co, cl, mx, ae, sa, za (batch 2+3).
+17 markets total.

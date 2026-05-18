@@ -33,6 +33,16 @@ from mcp_food_regulatory.sources.jp_caa import JPCAASource
 from mcp_food_regulatory.sources.us_fda import USFDASource
 from mcp_food_regulatory.sources.ca_health_canada import CAHealthCanadaSource
 from mcp_food_regulatory.sources.au_fsanz import AUFSANZSource
+from mcp_food_regulatory.sources.in_fssai import INFSSAISource
+from mcp_food_regulatory.sources.cn_nhc import CNNHCSource
+from mcp_food_regulatory.sources.kr_mfds import KRMFDSSource
+from mcp_food_regulatory.sources.br_anvisa import BRANVISASource
+from mcp_food_regulatory.sources.co_invima import COINVIMASource
+from mcp_food_regulatory.sources.cl_minsal import CLMINSALSource
+from mcp_food_regulatory.sources.mx_cofepris import MXCOFEPRISSource
+from mcp_food_regulatory.sources.ae_esma import AEESMASource
+from mcp_food_regulatory.sources.sa_sfda import SASFDASource
+from mcp_food_regulatory.sources.za_doh import ZADoHSource
 
 # ------------------------------------------------------------------ #
 #  Server init                                                        #
@@ -44,9 +54,8 @@ mcp = FastMCP(
         "This server provides access to food regulatory databases across global markets. "
         "Use it to check health claim status, look up regulatory standards, compare "
         "claim permissions across markets, and get market regulatory overviews. "
-        "Supported markets: codex (Codex Alimentarius), eu (European Union), "
-        "ph (Philippines FDA), jp (Japan CAA), us (US FDA), ca (Health Canada), au (FSANZ). "
-        "More markets coming — see README for contribution guide."
+        "Supported markets: codex, eu, ph, jp, us, ca, au, in, cn, kr, br, co, cl, mx, ae, sa, za. "
+        "Use get_market_overview to explore a market. See README for contribution guide."
     ),
 )
 
@@ -78,6 +87,16 @@ SOURCES = {
     Market.US: USFDASource,
     Market.CA: CAHealthCanadaSource,
     Market.AU: AUFSANZSource,
+    Market.IN: INFSSAISource,
+    Market.CN: CNNHCSource,
+    Market.KR: KRMFDSSource,
+    Market.BR: BRANVISASource,
+    Market.CO: COINVIMASource,
+    Market.CL: CLMINSALSource,
+    Market.MX: MXCOFEPRISSource,
+    Market.AE: AEESMASource,
+    Market.SA: SASFDASource,
+    Market.ZA: ZADoHSource,
 }
 
 def _get_source(market: Market):
