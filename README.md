@@ -80,6 +80,17 @@ Restart Claude. That's it.
 
 Add the same block to `~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, or your Cline MCP config.
 
+### Microsoft Copilot (Teams / Microsoft 365)
+
+Requires a Microsoft 365 Copilot licence and Copilot Studio access.
+
+1. Open [Copilot Studio](https://copilotstudio.microsoft.com) and create or open an agent
+2. Go to **Tools → Add a tool → Model Context Protocol (MCP)**
+3. Enter the URL: `https://mcp-food-regulatory.vercel.app/mcp`
+4. Save, then **Publish → Microsoft Teams**
+
+The 6 tools will be discovered automatically and available in Teams chat.
+
 ### GitHub Copilot (VS Code)
 
 VS Code uses a `"servers"` key instead of `"mcpServers"`. Create `.vscode/mcp.json`:

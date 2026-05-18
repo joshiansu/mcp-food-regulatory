@@ -592,6 +592,7 @@
         <button class="ctab" data-ctab="windsurf"><img class="ctab-logo" src="https://cdn.simpleicons.org/codeium" alt="Windsurf" width="15" height="15" onerror="this.style.display='none'"> Windsurf</button>
         <button class="ctab" data-ctab="cline"> Cline</button>
         <button class="ctab" data-ctab="copilot"><img class="ctab-logo" src="https://cdn.simpleicons.org/github" alt="GitHub" width="15" height="15" onerror="this.style.display='none'"> GitHub Copilot</button>
+        <button class="ctab" data-ctab="mscopilot"><img class="ctab-logo" src="https://cdn.simpleicons.org/microsoftteams" alt="Microsoft Teams" width="15" height="15" onerror="this.style.display='none'"> Microsoft Copilot</button>
         <button class="ctab" data-ctab="openai"><img class="ctab-logo" src="https://cdn.simpleicons.org/openai" alt="OpenAI" width="15" height="15" onerror="this.style.display='none'"> ChatGPT &amp; Others</button>
         <button class="ctab" data-ctab="other"> Any MCP App</button>
       </div>
@@ -761,6 +762,36 @@
             <div class="step-body">
               <h4>Use in Copilot Chat</h4>
               <p>Open <strong>GitHub Copilot Chat</strong> in VS Code and switch to <strong>Agent mode</strong>. The food-regulatory tools will be available automatically. Ask about any health claim or market.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Microsoft Copilot (Teams / M365) -->
+      <div class="ctab-panel" id="ctab-mscopilot">
+        <span class="connector-note">ℹ️ Requires a Microsoft 365 Copilot licence and access to Copilot Studio</span>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h4>Open Copilot Studio</h4>
+              <p>Go to <a href="https://copilotstudio.microsoft.com" style="color:var(--primary)" target="_blank" rel="noopener">copilotstudio.microsoft.com</a> and sign in with your Microsoft 365 account. Create a new agent or open an existing one.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h4>Add the MCP server as a tool</h4>
+              <p>In the agent editor, go to <strong>Tools → Add a tool → Model Context Protocol (MCP)</strong>. Enter the server URL:</p>
+              <div class="code-block"><span class="code-val">https://mcp-food-regulatory.vercel.app/mcp</span></div>
+              <p style="margin-top:10px;font-size:13px;color:var(--text-3)">Copilot Studio will discover all 6 tools automatically from the server.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h4>Publish to Microsoft Teams</h4>
+              <p>Click <strong>Publish → Microsoft Teams</strong> to deploy the agent to your Teams workspace. Once deployed, your team can ask food regulatory questions directly in Teams chat.</p>
             </div>
           </div>
         </div>
