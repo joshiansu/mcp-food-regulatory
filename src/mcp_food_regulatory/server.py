@@ -520,18 +520,18 @@ async def list_markets() -> dict:
         "us": "Food and Drug Administration (US FDA)",
         "ca": "Health Canada / CFIA",
         "au": "Food Standards Australia New Zealand (FSANZ)",
-    }
-    planned = {
-        "br": "Brazil ANVISA",
-        "kr": "Korea Ministry of Food and Drug Safety (MFDS)",
-        "sa": "Saudi Food and Drug Authority (SFDA)",
         "in": "Food Safety and Standards Authority of India (FSSAI)",
         "cn": "National Health Commission / SAMR (China)",
+        "kr": "Korea Ministry of Food and Drug Safety (MFDS)",
+        "br": "Brazil ANVISA",
         "co": "INVIMA (Colombia)",
         "cl": "MINSAL / ISP (Chile)",
-        "mx": "COFEPRIS (Mexico)",
-        "ae": "ESMA / Dubai Municipality (UAE)",
+        "mx": "COFEPRIS / SSA (Mexico)",
+        "ae": "ESMA / Dubai Municipality / ADAFSA (UAE)",
+        "sa": "Saudi Food and Drug Authority (SFDA)",
         "za": "Department of Health (South Africa)",
+    }
+    planned = {
         "my": "Malaysia Ministry of Health",
         "vn": "Vietnam Ministry of Health",
         "id": "Indonesia BPOM",
