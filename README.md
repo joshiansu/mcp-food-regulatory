@@ -16,16 +16,30 @@ This MCP server turns that into a single tool call any AI agent can make.
 
 ## Markets covered
 
-| Market | Data source | Status |
-|--------|-------------|--------|
-| 🌍 **Codex Alimentarius** | FAO/WHO standards database | ✅ Implemented |
-| 🇪🇺 **European Union** | EUR-Lex API + EC Health Claims Register | ✅ Implemented |
-| 🇦🇺 **Australia / NZ** | FSANZ Food Standards Code | 🔜 Planned |
-| 🇵🇭 **Philippines** | FDA Philippines | 🔜 Planned |
-| 🇲🇾 **Malaysia** | MOH Malaysia / MySMERT | 🔜 Planned |
-| 🇻🇳 **Vietnam** | MOH Vietnam QCVN | 🔜 Planned |
+| Market | Authority | Status |
+|--------|-----------|--------|
+| 🌍 **Codex Alimentarius** | FAO/WHO | ✅ Live |
+| 🇪🇺 **European Union** | EFSA / European Commission | ✅ Live |
+| 🇺🇸 **United States** | US FDA | ✅ Live |
+| 🇯🇵 **Japan** | Consumer Affairs Agency | ✅ Live |
+| 🇨🇦 **Canada** | Health Canada / CFIA | ✅ Live |
+| 🇦🇺 **Australia** | FSANZ | ✅ Live |
+| 🇵🇭 **Philippines** | FDA Philippines | ✅ Live |
+| 🇮🇳 **India** | FSSAI | ✅ Live |
+| 🇨🇳 **China** | NHC / SAMR | ✅ Live |
+| 🇰🇷 **South Korea** | MFDS | ✅ Live |
+| 🇧🇷 **Brazil** | ANVISA | ✅ Live |
+| 🇨🇴 **Colombia** | INVIMA | ✅ Live |
+| 🇨🇱 **Chile** | MINSAL / ISP | ✅ Live |
+| 🇲🇽 **Mexico** | COFEPRIS / SSA | ✅ Live |
+| 🇦🇪 **UAE** | ESMA / Dubai Municipality | ✅ Live |
+| 🇸🇦 **Saudi Arabia** | SFDA | ✅ Live |
+| 🇿🇦 **South Africa** | Department of Health | ✅ Live |
+| 🇲🇾 **Malaysia** | MOH Malaysia | 🔜 Planned |
+| 🇻🇳 **Vietnam** | MOH Vietnam | 🔜 Planned |
 | 🇮🇩 **Indonesia** | BPOM | 🔜 Planned |
 | 🇹🇭 **Thailand** | Thai FDA | 🔜 Planned |
+| 🇬🇧 **United Kingdom** | UK FSA | 🔜 Planned |
 
 ---
 
@@ -44,39 +58,49 @@ get_market_overview(market)                      → summary of regulatory frame
 
 ## Quickstart
 
-### Install
+The server is deployed at `https://mcp-food-regulatory.vercel.app/mcp`. No local installation needed.
 
-```bash
-# Requires Python 3.10+
-uv add mcp-food-regulatory
+### Claude Desktop
 
-# Or from source
-git clone https://github.com/YOUR_USERNAME/mcp-food-regulatory
-cd mcp-food-regulatory
-uv sync
-```
-
-### Run
-
-```bash
-# stdio (for Claude Desktop)
-uv run mcp-food-regulatory
-
-# HTTP (for agents / remote)
-uv run mcp-food-regulatory --transport streamable-http --port 8000
-```
-
-### Add to Claude Desktop
+Open **Settings → Developer → Edit Config** and add:
 
 ```json
 {
   "mcpServers": {
     "food-regulatory": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/mcp-food-regulatory", "run", "mcp-food-regulatory"]
+      "url": "https://mcp-food-regulatory.vercel.app/mcp"
     }
   }
 }
+```
+
+Restart Claude. That's it.
+
+### Cursor / Windsurf / Cline
+
+Add the same block to `~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, or your Cline MCP config.
+
+### GitHub Copilot (VS Code)
+
+VS Code uses a `"servers"` key instead of `"mcpServers"`. Create `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "food-regulatory": {
+      "url": "https://mcp-food-regulatory.vercel.app/mcp"
+    }
+  }
+}
+```
+
+### Run locally (development)
+
+```bash
+git clone https://github.com/joshiansu/mcp-food-regulatory
+cd mcp-food-regulatory
+uv sync
+uv run mcp-food-regulatory --transport streamable-http --port 8000
 ```
 
 ---
