@@ -43,6 +43,12 @@ from mcp_food_regulatory.sources.mx_cofepris import MXCOFEPRISSource
 from mcp_food_regulatory.sources.ae_esma import AEESMASource
 from mcp_food_regulatory.sources.sa_sfda import SASFDASource
 from mcp_food_regulatory.sources.za_doh import ZADoHSource
+from mcp_food_regulatory.sources.pk_pfa import PKPFASource
+from mcp_food_regulatory.sources.bd_bfsa import BDBFSASource
+from mcp_food_regulatory.sources.lk_fcau import LKFCAUSource
+from mcp_food_regulatory.sources.np_dftqc import NPDFTQCSource
+from mcp_food_regulatory.sources.bt_bfdra import BTBFDRASource
+from mcp_food_regulatory.sources.mv_mfda import MVMFDASource
 
 # ------------------------------------------------------------------ #
 #  Server init                                                        #
@@ -54,7 +60,7 @@ mcp = FastMCP(
         "This server provides access to food regulatory databases across global markets. "
         "Use it to check health claim status, look up regulatory standards, compare "
         "claim permissions across markets, and get market regulatory overviews. "
-        "Supported markets: codex, eu, ph, jp, us, ca, au, in, cn, kr, br, co, cl, mx, ae, sa, za. "
+        "Supported markets: codex, eu, ph, jp, us, ca, au, in, cn, kr, br, co, cl, mx, ae, sa, za, pk, bd, lk, np, bt, mv. "
         "Use get_market_overview to explore a market. See README for contribution guide."
     ),
 )
@@ -97,6 +103,12 @@ SOURCES = {
     Market.AE: AEESMASource,
     Market.SA: SASFDASource,
     Market.ZA: ZADoHSource,
+    Market.PK: PKPFASource,
+    Market.BD: BDBFSASource,
+    Market.LK: LKFCAUSource,
+    Market.NP: NPDFTQCSource,
+    Market.BT: BTBFDRASource,
+    Market.MV: MVMFDASource,
 }
 
 def _get_source(market: Market):

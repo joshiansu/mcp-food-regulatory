@@ -43,6 +43,12 @@ class Market(str, Enum):
     AE = "ae"       # UAE / ESMA
     SA = "sa"       # Saudi Arabia / SFDA
     ZA = "za"       # South Africa / DoH
+    PK = "pk"       # Pakistan / PFA + PSQCA
+    BD = "bd"       # Bangladesh / BFSA
+    LK = "lk"       # Sri Lanka / FCAU + SLSI
+    NP = "np"       # Nepal / DFTQC
+    BT = "bt"       # Bhutan / BFDRA
+    MV = "mv"       # Maldives / MFDA
 
 
 class RegulatoryBasis(BaseModel):
