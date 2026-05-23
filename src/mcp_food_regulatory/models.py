@@ -5,7 +5,7 @@ These are the canonical shapes returned by every tool in the MCP server.
 
 from __future__ import annotations
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -70,6 +70,11 @@ class ClaimResult(BaseModel):
     efsa_opinion: Optional[str] = Field(None, description="EFSA or equivalent opinion reference (EU only)")
     last_updated: Optional[str] = Field(None, description="ISO date of last known update")
     source_url: Optional[str] = Field(None, description="Direct source URL")
+    data_confidence: Literal["seeded", "live", "official_download"] = Field(
+        "seeded", description="Source quality: seeded=hardcoded offline data, live=fetched at call time, official_download=from official bulk download"
+    )
+    verified_date: Optional[str] = Field(None, description="ISO date this data was last verified against source")
+    staleness_warning: bool = Field(True, description="True if data may be outdated and should be cross-checked")
 
 
 class Standard(BaseModel):
@@ -85,6 +90,11 @@ class Standard(BaseModel):
     key_definitions: Optional[dict[str, str]] = Field(
         None, description="Important definitions extracted from the standard"
     )
+    data_confidence: Literal["seeded", "live", "official_download"] = Field(
+        "seeded", description="Source quality: seeded=hardcoded offline data, live=fetched at call time, official_download=from official bulk download"
+    )
+    verified_date: Optional[str] = Field(None, description="ISO date this data was last verified against source")
+    staleness_warning: bool = Field(True, description="True if data may be outdated and should be cross-checked")
 
 
 class AdditiveStatus(BaseModel):
@@ -117,3 +127,38 @@ class MarketOverview(BaseModel):
         None, description="Summary of how health claims are handled"
     )
     notes: Optional[str] = None
+
+
+class RegulatoryUpdate(BaseModel):
+    """A known regulatory change in a market -- new legislation, amended standards, enforcement shifts."""
+    market: Market
+    change_type: Literal[
+        "new_claim_permitted",
+        "claim_prohibited",
+        "standard_amended",
+        "new_legislation",
+        "enforcement_change",
+    ]
+    summary: str = Field(description="Plain-language description of what changed")
+    effective_date: Optional[str] = Field(None, description="ISO date the change took effect")
+    instrument: str = Field(description="Regulation, Act, or official document name")
+    url: Optional[str] = Field(None, description="Direct link to the instrument or announcement")
+    data_confidence: Literal["seeded", "live", "official_download"] = Field("seeded")
+    verified_date: Optional[str] = Field(None, description="ISO date this entry was last verified")
+
+
+class NutrientClaimThreshold(BaseModel):
+    """Numeric threshold required to make a nutrient content claim in a market."""
+    market: Market
+    nutrient: str = Field(description="Nutrient name, e.g. 'protein', 'dietary fibre', 'fat', 'sodium'")
+    claim_type: str = Field(description="Claim category: 'source_of', 'high_in', 'low', 'free', 'reduced', 'no_added'")
+    claim_wording: str = Field(description="Exact permitted wording on pack")
+    threshold_value: str = Field(description="Qualifying threshold, e.g. '≥3g/100g or ≥1.5g/100kcal'")
+    threshold_basis: str = Field(description="Basis for measurement: 'per 100g', 'per 100ml', 'per serving', 'per 100kcal'")
+    reference_value: Optional[str] = Field(None, description="NRV or DV reference used, where applicable")
+    conditions: Optional[str] = Field(None, description="Additional conditions or restrictions")
+    governing_instrument: str = Field(description="Regulation or standard, e.g. 'EC 1924/2006 Annex'")
+    data_confidence: Literal["seeded", "live", "official_download"] = Field(
+        "seeded", description="Source quality of this threshold entry"
+    )
+    verified_date: Optional[str] = Field(None, description="ISO date this threshold was last verified")

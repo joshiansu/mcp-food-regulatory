@@ -12,7 +12,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import httpx
 from mcp_food_regulatory.models import (
-    Market, ClaimResult, Standard, AdditiveStatus, MarketOverview
+    Market, ClaimResult, Standard, AdditiveStatus, MarketOverview,
+    NutrientClaimThreshold, RegulatoryUpdate,
 )
 
 
@@ -98,6 +99,29 @@ class RegulatorySource(ABC):
         Returns None if not supported or not found.
         """
         return None
+
+    async def get_nutrient_claim_thresholds(
+        self,
+        nutrient: str | None = None,
+    ) -> list[NutrientClaimThreshold]:
+        """
+        Return nutrient content claim thresholds for this market.
+        Override in sources that have threshold data.
+        Returns empty list if not implemented.
+        """
+        return []
+
+    async def get_regulatory_updates(
+        self,
+        since_date: str | None = None,
+    ) -> list[RegulatoryUpdate]:
+        """
+        Return known regulatory changes for this market.
+        Override in sources that have update data.
+        since_date: ISO date string (YYYY-MM-DD); returns changes on or after this date.
+        Returns empty list if not implemented.
+        """
+        return []
 
     # ------------------------------------------------------------------ #
     #  Shared helpers                                                     #

@@ -19,9 +19,11 @@ from __future__ import annotations
 import re
 import httpx
 from mcp_food_regulatory.models import (
-    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis
+    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis,
+    NutrientClaimThreshold, RegulatoryUpdate,
 )
 from mcp_food_regulatory.sources.base import RegulatorySource
+from mcp_food_regulatory.sources.regulatory_updates_seed import get_seeded_updates
 
 # EC Health Claims Register — Excel download (publicly available)
 _HC_REGISTER_URL = (
@@ -184,6 +186,94 @@ _EU_CLAIM_PROVISIONS: dict[str, list[dict]] = {
 }
 
 
+# EU nutrient content claim thresholds -- EC 1924/2006 Annex
+# Verified against the official Annex text (OJ L 404, 30.12.2006)
+_EU_CLAIM_THRESHOLDS: list[dict] = [
+    # --- Dietary fibre ---
+    {"nutrient": "dietary fibre", "claim_type": "source_of", "claim_wording": "Source of fibre",
+     "threshold_value": "≥3g/100g or ≥1.5g/100kcal", "threshold_basis": "per 100g or per 100kcal",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "dietary fibre", "claim_type": "high_in", "claim_wording": "High fibre",
+     "threshold_value": "≥6g/100g or ≥3g/100kcal", "threshold_basis": "per 100g or per 100kcal",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    # --- Protein ---
+    {"nutrient": "protein", "claim_type": "source_of", "claim_wording": "Source of protein",
+     "threshold_value": "≥12% of energy from protein", "threshold_basis": "per 100kcal",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "protein", "claim_type": "high_in", "claim_wording": "High in protein",
+     "threshold_value": "≥20% of energy from protein", "threshold_basis": "per 100kcal",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    # --- Fat ---
+    {"nutrient": "fat", "claim_type": "low", "claim_wording": "Low fat",
+     "threshold_value": "≤3g/100g (solid) or ≤1.5g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "fat", "claim_type": "free", "claim_wording": "Fat free",
+     "threshold_value": "≤0.5g/100g or ≤0.5g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "fat", "claim_type": "reduced", "claim_wording": "Reduced fat",
+     "threshold_value": "≥30% less fat than comparable product", "threshold_basis": "compared to reference",
+     "conditions": "Reduction in content must be stated on label",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    # --- Saturated fat ---
+    {"nutrient": "saturated fat", "claim_type": "low", "claim_wording": "Low saturated fat",
+     "threshold_value": "≤1.5g/100g (solid) or ≤0.75g/100ml (liquid); saturates ≤10% of energy",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "saturated fat", "claim_type": "free", "claim_wording": "Saturated fat free",
+     "threshold_value": "≤0.1g/100g or ≤0.1g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    # --- Sugars ---
+    {"nutrient": "sugars", "claim_type": "low", "claim_wording": "Low sugar",
+     "threshold_value": "≤5g/100g (solid) or ≤2.5g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "sugars", "claim_type": "free", "claim_wording": "Sugar free",
+     "threshold_value": "≤0.5g/100g or ≤0.5g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "sugars", "claim_type": "no_added", "claim_wording": "No added sugars",
+     "threshold_value": "No added mono- or disaccharides or any other food used for sweetening",
+     "threshold_basis": "n/a",
+     "conditions": "If sugars are naturally present, label must state 'Contains naturally occurring sugars'",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    # --- Sodium / salt ---
+    {"nutrient": "sodium", "claim_type": "low", "claim_wording": "Low sodium/salt",
+     "threshold_value": "≤0.12g sodium/100g or ≤0.3g salt/100g",
+     "threshold_basis": "per 100g",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "sodium", "claim_type": "free", "claim_wording": "Sodium free / Salt free",
+     "threshold_value": "≤0.005g sodium/100g", "threshold_basis": "per 100g",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "sodium", "claim_type": "reduced", "claim_wording": "Reduced sodium/salt",
+     "threshold_value": "≥25% less sodium than comparable product", "threshold_basis": "compared to reference",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    # --- Energy ---
+    {"nutrient": "energy", "claim_type": "low", "claim_wording": "Low energy",
+     "threshold_value": "≤40kcal/100g (solid) or ≤20kcal/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "energy", "claim_type": "free", "claim_wording": "Energy free",
+     "threshold_value": "≤4kcal/100ml (liquid only)", "threshold_basis": "per 100ml",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    {"nutrient": "energy", "claim_type": "reduced", "claim_wording": "Reduced energy",
+     "threshold_value": "≥30% fewer kcal than comparable product", "threshold_basis": "compared to reference",
+     "governing_instrument": "EC 1924/2006 Annex", "verified_date": "2024-01"},
+    # --- Vitamins and minerals ---
+    {"nutrient": "vitamins_minerals", "claim_type": "source_of",
+     "claim_wording": "Source of [vitamin/mineral]",
+     "threshold_value": "≥15% NRV per 100g or 100ml or per serving",
+     "threshold_basis": "per 100g, per 100ml, or per serving",
+     "reference_value": "NRV as per EU 1169/2011 Annex XIII",
+     "governing_instrument": "EC 1924/2006 Annex + EU 1169/2011", "verified_date": "2024-01"},
+    {"nutrient": "vitamins_minerals", "claim_type": "high_in",
+     "claim_wording": "High in [vitamin/mineral]",
+     "threshold_value": "≥30% NRV per 100g or 100ml or per serving",
+     "threshold_basis": "per 100g, per 100ml, or per serving",
+     "reference_value": "NRV as per EU 1169/2011 Annex XIII",
+     "governing_instrument": "EC 1924/2006 Annex + EU 1169/2011", "verified_date": "2024-01"},
+]
+
+
 class EUSource(RegulatorySource):
     market = Market.EU
 
@@ -301,6 +391,36 @@ class EUSource(RegulatorySource):
             if query_lower in data["title"].lower()
             or query_lower in data.get("summary", "").lower()
         ]
+        return results
+
+    async def get_regulatory_updates(
+        self,
+        since_date: str | None = None,
+    ) -> list[RegulatoryUpdate]:
+        """Return seeded EU regulatory updates, optionally filtered by date."""
+        return get_seeded_updates(Market.EU, since_date)
+
+    async def get_nutrient_claim_thresholds(
+        self,
+        nutrient: str | None = None,
+    ) -> list[NutrientClaimThreshold]:
+        """Return EU nutrient content claim thresholds from EC 1924/2006 Annex."""
+        results = []
+        for t in _EU_CLAIM_THRESHOLDS:
+            if nutrient is None or nutrient.lower() in t["nutrient"].lower():
+                results.append(NutrientClaimThreshold(
+                    market=Market.EU,
+                    nutrient=t["nutrient"],
+                    claim_type=t["claim_type"],
+                    claim_wording=t["claim_wording"],
+                    threshold_value=t["threshold_value"],
+                    threshold_basis=t["threshold_basis"],
+                    reference_value=t.get("reference_value"),
+                    conditions=t.get("conditions"),
+                    governing_instrument=t["governing_instrument"],
+                    data_confidence="seeded",
+                    verified_date=t.get("verified_date"),
+                ))
         return results
 
     async def get_market_overview(self) -> MarketOverview:

@@ -9,7 +9,7 @@ import pytest_asyncio
 import httpx
 from unittest.mock import AsyncMock, patch
 
-from mcp_food_regulatory.models import Market, ClaimStatus
+from mcp_food_regulatory.models import Market, ClaimStatus, NutrientClaimThreshold, RegulatoryUpdate
 from mcp_food_regulatory.sources.codex import CodexSource
 from mcp_food_regulatory.sources.eu import EUSource
 from mcp_food_regulatory.sources.ph_fda import PhFDASource
@@ -17,6 +17,22 @@ from mcp_food_regulatory.sources.jp_caa import JPCAASource
 from mcp_food_regulatory.sources.us_fda import USFDASource
 from mcp_food_regulatory.sources.ca_health_canada import CAHealthCanadaSource
 from mcp_food_regulatory.sources.au_fsanz import AUFSANZSource
+from mcp_food_regulatory.sources.in_fssai import INFSSAISource
+from mcp_food_regulatory.sources.cn_nhc import CNNHCSource
+from mcp_food_regulatory.sources.kr_mfds import KRMFDSSource
+from mcp_food_regulatory.sources.br_anvisa import BRANVISASource
+from mcp_food_regulatory.sources.co_invima import COINVIMASource
+from mcp_food_regulatory.sources.cl_minsal import CLMINSALSource
+from mcp_food_regulatory.sources.mx_cofepris import MXCOFEPRISSource
+from mcp_food_regulatory.sources.ae_esma import AEESMASource
+from mcp_food_regulatory.sources.sa_sfda import SASFDASource
+from mcp_food_regulatory.sources.za_doh import ZADoHSource
+from mcp_food_regulatory.sources.pk_pfa import PKPFASource
+from mcp_food_regulatory.sources.bd_bfsa import BDBFSASource
+from mcp_food_regulatory.sources.lk_fcau import LKFCAUSource
+from mcp_food_regulatory.sources.np_dftqc import NPDFTQCSource
+from mcp_food_regulatory.sources.bt_bfdra import BTBFDRASource
+from mcp_food_regulatory.sources.mv_mfda import MVMFDASource
 
 
 @pytest.fixture
@@ -244,6 +260,318 @@ class TestServerTools:
         from mcp_food_regulatory.server import get_market_overview
         result = await get_market_overview("mars")
         assert "error" in result
+
+
+# ------------------------------------------------------------------ #
+#  Nutrient claim threshold tests (P2)                               #
+# ------------------------------------------------------------------ #
+
+class TestNutrientClaimThresholds:
+    """Tests for get_nutrient_claim_thresholds and compare_nutrient_claim_thresholds."""
+
+    # --- Model shape ---
+
+    def test_nutrient_claim_threshold_model_fields(self):
+        t = NutrientClaimThreshold(
+            market=Market.EU,
+            nutrient="dietary fibre",
+            claim_type="source_of",
+            claim_wording="Source of fibre",
+            threshold_value="≥3g/100g",
+            threshold_basis="per 100g",
+            governing_instrument="EC 1924/2006 Annex",
+        )
+        assert t.data_confidence == "seeded"
+        assert t.verified_date is None
+        assert t.market == Market.EU
+
+    def test_claim_result_has_confidence_fields(self):
+        from mcp_food_regulatory.models import ClaimResult
+        r = ClaimResult(
+            market=Market.EU,
+            ingredient="caffeine",
+            claim_type="health_claim",
+            status=ClaimStatus.PERMITTED,
+        )
+        assert r.data_confidence == "seeded"
+        assert r.staleness_warning is True
+        assert r.verified_date is None
+
+    def test_standard_has_confidence_fields(self):
+        from mcp_food_regulatory.models import Standard
+        s = Standard(
+            standard_id="EC 1924/2006",
+            market=Market.EU,
+            title="Test",
+        )
+        assert s.data_confidence == "seeded"
+        assert s.staleness_warning is True
+
+    # --- EU source ---
+
+    @pytest.mark.asyncio
+    async def test_eu_thresholds_all_nutrients(self, eu):
+        results = await eu.get_nutrient_claim_thresholds()
+        assert len(results) >= 10
+        assert all(isinstance(t, NutrientClaimThreshold) for t in results)
+        assert all(t.market == Market.EU for t in results)
+
+    @pytest.mark.asyncio
+    async def test_eu_thresholds_fibre_filter(self, eu):
+        results = await eu.get_nutrient_claim_thresholds("dietary fibre")
+        assert len(results) >= 2
+        assert all("fibre" in t.nutrient.lower() for t in results)
+        claim_types = {t.claim_type for t in results}
+        assert "source_of" in claim_types
+        assert "high_in" in claim_types
+
+    @pytest.mark.asyncio
+    async def test_eu_thresholds_protein_filter(self, eu):
+        results = await eu.get_nutrient_claim_thresholds("protein")
+        assert len(results) >= 2
+        assert all("protein" in t.nutrient.lower() for t in results)
+        assert any("20%" in t.threshold_value for t in results)
+
+    @pytest.mark.asyncio
+    async def test_eu_thresholds_have_governing_instrument(self, eu):
+        results = await eu.get_nutrient_claim_thresholds()
+        assert all(t.governing_instrument for t in results)
+        assert all("1924/2006" in t.governing_instrument for t in results)
+
+    @pytest.mark.asyncio
+    async def test_eu_thresholds_no_match_returns_empty(self, eu):
+        results = await eu.get_nutrient_claim_thresholds("xylobiose_fictional_xyz")
+        assert results == []
+
+    # --- US source ---
+
+    @pytest.mark.asyncio
+    async def test_us_thresholds_all_nutrients(self, us):
+        results = await us.get_nutrient_claim_thresholds()
+        assert len(results) >= 10
+        assert all(isinstance(t, NutrientClaimThreshold) for t in results)
+        assert all(t.market == Market.US for t in results)
+
+    @pytest.mark.asyncio
+    async def test_us_thresholds_fibre_filter(self, us):
+        results = await us.get_nutrient_claim_thresholds("dietary fibre")
+        assert len(results) >= 2
+        claim_types = {t.claim_type for t in results}
+        assert "source_of" in claim_types
+        assert "high_in" in claim_types
+
+    @pytest.mark.asyncio
+    async def test_us_thresholds_sodium_filter(self, us):
+        results = await us.get_nutrient_claim_thresholds("sodium")
+        assert len(results) >= 3
+        assert any("140mg" in t.threshold_value for t in results)
+
+    @pytest.mark.asyncio
+    async def test_us_thresholds_have_cfr_instrument(self, us):
+        results = await us.get_nutrient_claim_thresholds()
+        assert all("21 CFR" in t.governing_instrument for t in results)
+
+    # --- Base class default ---
+
+    @pytest.mark.asyncio
+    async def test_base_class_returns_empty_list(self, eu):
+        from mcp_food_regulatory.sources.base import RegulatorySource
+        # Base implementation (not overridden) should return []
+        # We test via a market without override -- use parent directly
+        result = await RegulatorySource.get_nutrient_claim_thresholds(eu, "protein")
+        assert result == []
+
+    # --- Server tools ---
+
+    @pytest.mark.asyncio
+    async def test_server_get_nutrient_claim_thresholds_eu(self):
+        from mcp_food_regulatory.server import get_nutrient_claim_thresholds
+        result = await get_nutrient_claim_thresholds(["eu"])
+        assert "results" in result
+        assert "eu" in result["results"]
+        assert len(result["results"]["eu"]) >= 10
+        assert result["errors"] is None
+
+    @pytest.mark.asyncio
+    async def test_server_get_nutrient_claim_thresholds_us(self):
+        from mcp_food_regulatory.server import get_nutrient_claim_thresholds
+        result = await get_nutrient_claim_thresholds(["us"], nutrient="dietary fibre")
+        assert "results" in result
+        assert "us" in result["results"]
+        assert len(result["results"]["us"]) >= 2
+
+    @pytest.mark.asyncio
+    async def test_server_get_nutrient_claim_thresholds_unknown_market(self):
+        from mcp_food_regulatory.server import get_nutrient_claim_thresholds
+        result = await get_nutrient_claim_thresholds(["mars"])
+        assert result["errors"] is not None
+        assert "mars" in result["errors"]
+
+    @pytest.mark.asyncio
+    async def test_server_compare_nutrient_claim_thresholds_eu_us(self):
+        from mcp_food_regulatory.server import compare_nutrient_claim_thresholds
+        result = await compare_nutrient_claim_thresholds("dietary fibre", ["eu", "us"])
+        assert "per_market" in result
+        assert "eu" in result["per_market"]
+        assert "us" in result["per_market"]
+        assert "comparison_table" in result
+        assert len(result["comparison_table"]) >= 2
+        assert result["errors"] is None
+
+    @pytest.mark.asyncio
+    async def test_server_compare_nutrient_claim_thresholds_unimplemented_market(self):
+        from mcp_food_regulatory.server import compare_nutrient_claim_thresholds
+        # PH has no threshold data -- should return empty list, not error
+        result = await compare_nutrient_claim_thresholds("protein", ["eu", "ph"])
+        assert "eu" in result["per_market"]
+        assert len(result["per_market"]["eu"]) >= 2
+        # PH returns empty list -- not an error
+        assert result["per_market"].get("ph") == [] or "ph" not in result["per_market"]
+
+    @pytest.mark.asyncio
+    async def test_server_compare_summary_shows_markets_with_data(self):
+        from mcp_food_regulatory.server import compare_nutrient_claim_thresholds
+        result = await compare_nutrient_claim_thresholds("sodium", ["eu", "us"])
+        assert "EU" in result["summary"] or "US" in result["summary"]
+
+
+# ------------------------------------------------------------------ #
+#  Regulatory updates tests (P3)                                      #
+# ------------------------------------------------------------------ #
+
+class TestRegulatoryUpdates:
+    """Tests for get_regulatory_updates tool and RegulatoryUpdate model."""
+
+    # --- Model ---
+
+    def test_regulatory_update_model_fields(self):
+        u = RegulatoryUpdate(
+            market=Market.US,
+            change_type="new_legislation",
+            summary="Sesame added as 9th major allergen",
+            effective_date="2023-01-01",
+            instrument="FASTER Act 2021",
+        )
+        assert u.data_confidence == "seeded"
+        assert u.market == Market.US
+
+    # --- Seed data correctness ---
+
+    @pytest.mark.asyncio
+    async def test_us_sesame_mandate_present(self, us):
+        updates = await us.get_regulatory_updates()
+        summaries = " ".join(u.summary for u in updates).lower()
+        assert "sesame" in summaries
+
+    @pytest.mark.asyncio
+    async def test_us_updates_have_effective_dates(self, us):
+        updates = await us.get_regulatory_updates()
+        assert len(updates) >= 2
+        dated = [u for u in updates if u.effective_date]
+        assert len(dated) >= 2
+
+    @pytest.mark.asyncio
+    async def test_eu_titanium_dioxide_ban_present(self, eu):
+        updates = await eu.get_regulatory_updates()
+        summaries = " ".join(u.summary for u in updates).lower()
+        assert "titanium" in summaries or "e171" in summaries
+
+    @pytest.mark.asyncio
+    async def test_au_allergen_update_present(self, au):
+        updates = await au.get_regulatory_updates()
+        summaries = " ".join(u.summary for u in updates).lower()
+        assert "allergen" in summaries or "pregnancy" in summaries
+
+    @pytest.mark.asyncio
+    async def test_jp_walnut_allergen_present(self, jp):
+        updates = await jp.get_regulatory_updates()
+        summaries = " ".join(u.summary for u in updates).lower()
+        assert "walnut" in summaries or "クルミ" in summaries
+
+    @pytest.mark.asyncio
+    async def test_ca_sesame_allergen_present(self, ca):
+        updates = await ca.get_regulatory_updates()
+        summaries = " ".join(u.summary for u in updates).lower()
+        assert "sesame" in summaries
+
+    # --- Date filter ---
+
+    @pytest.mark.asyncio
+    async def test_date_filter_excludes_old_changes(self, us):
+        all_updates = await us.get_regulatory_updates()
+        recent = await us.get_regulatory_updates(since_date="2023-01-01")
+        assert len(recent) <= len(all_updates)
+        for u in recent:
+            if u.effective_date:
+                assert u.effective_date >= "2023-01-01"
+
+    @pytest.mark.asyncio
+    async def test_date_filter_future_returns_empty(self, us):
+        far_future = await us.get_regulatory_updates(since_date="2099-01-01")
+        assert far_future == []
+
+    # --- Base class default ---
+
+    @pytest.mark.asyncio
+    async def test_base_class_returns_empty(self):
+        from mcp_food_regulatory.sources.in_fssai import INFSSAISource
+        import httpx
+        source = INFSSAISource(httpx.AsyncClient())
+        result = await source.get_regulatory_updates()
+        assert result == []
+
+    # --- Server tool ---
+
+    @pytest.mark.asyncio
+    async def test_server_get_regulatory_updates_us(self):
+        from mcp_food_regulatory.server import get_regulatory_updates
+        result = await get_regulatory_updates(["us"])
+        assert "results" in result
+        assert "us" in result["results"]
+        assert len(result["results"]["us"]) >= 2
+
+    @pytest.mark.asyncio
+    async def test_server_get_regulatory_updates_multi_market(self):
+        from mcp_food_regulatory.server import get_regulatory_updates
+        result = await get_regulatory_updates(["us", "eu", "au"])
+        for m in ["us", "eu", "au"]:
+            assert m in result["results"]
+            assert len(result["results"][m]) >= 1
+
+    @pytest.mark.asyncio
+    async def test_server_get_regulatory_updates_with_since(self):
+        from mcp_food_regulatory.server import get_regulatory_updates
+        result = await get_regulatory_updates(["us"], since_date="2023-01-01")
+        updates = result["results"]["us"]
+        for u in updates:
+            if u.get("effective_date"):
+                assert u["effective_date"] >= "2023-01-01"
+
+    @pytest.mark.asyncio
+    async def test_server_get_regulatory_updates_unknown_market(self):
+        from mcp_food_regulatory.server import get_regulatory_updates
+        result = await get_regulatory_updates(["mars"])
+        assert result["errors"] is not None
+
+    @pytest.mark.asyncio
+    async def test_server_get_regulatory_updates_market_no_seed_returns_empty(self):
+        from mcp_food_regulatory.server import get_regulatory_updates
+        result = await get_regulatory_updates(["cn"])
+        assert "cn" in result["results"]
+        assert result["results"]["cn"] == []
+
+    @pytest.mark.asyncio
+    async def test_server_summary_mentions_count(self):
+        from mcp_food_regulatory.server import get_regulatory_updates
+        result = await get_regulatory_updates(["us", "eu"])
+        assert "update" in result["summary"].lower() or "US" in result["summary"]
+
+    @pytest.mark.asyncio
+    async def test_server_data_note_present(self):
+        from mcp_food_regulatory.server import get_regulatory_updates
+        result = await get_regulatory_updates(["us"])
+        assert "data_note" in result
+        assert "curated" in result["data_note"].lower()
 
 
 # ------------------------------------------------------------------ #
@@ -575,3 +903,77 @@ class TestAUFSANZSource:
         r1 = await au.search_health_claims("calcium")
         r2 = await au.search_health_claims("calcium")
         assert len(r1) == len(r2)
+
+
+# ------------------------------------------------------------------ #
+#  Parametrized smoke tests for Batch 2 + 3 + South Asia markets     #
+# ------------------------------------------------------------------ #
+
+# (source_class, market_enum, known_standard_id)
+_BATCH_MARKETS = [
+    (INFSSAISource,   Market.IN,  "FSS Claims 2018"),
+    (CNNHCSource,     Market.CN,  "GB 28050-2011"),
+    (KRMFDSSource,    Market.KR,  "Health Functional Food Act"),
+    (BRANVISASource,  Market.BR,  "RDC 429/2020"),
+    (COINVIMASource,  Market.CO,  "Resolución 2508/2012"),
+    (CLMINSALSource,  Market.CL,  "DS 977/96 RSA"),
+    (MXCOFEPRISSource, Market.MX, "NOM-051-SCFI/SSA1-2010"),
+    (AEESMASource,    Market.AE,  "UAE.S GSO 9:2013"),
+    (SASFDASource,    Market.SA,  "SFDA.FD 9001:2017"),
+    (ZADoHSource,     Market.ZA,  "R146/2010"),
+    (PKPFASource,     Market.PK,  "Pure Food Ordinance 1960"),
+    (BDBFSASource,    Market.BD,  "Food Safety Act 2013"),
+    (LKFCAUSource,    Market.LK,  "Food Act No. 26/1980"),
+    (NPDFTQCSource,   Market.NP,  "Food Act 1966"),
+    (BTBFDRASource,   Market.BT,  "Food Safety and Quality Act 2005"),
+    (MVMFDASource,    Market.MV,  "Food Safety Act 2019"),
+]
+
+_market_ids = [m[1].value for m in _BATCH_MARKETS]
+
+
+@pytest.mark.parametrize("source_cls,market_enum,known_std", _BATCH_MARKETS, ids=_market_ids)
+class TestBatchMarketSmoke:
+    """Five smoke assertions run against every Batch 2/3/South-Asia connector."""
+
+    @pytest.mark.asyncio
+    async def test_market_overview_non_empty(self, source_cls, market_enum, known_std):
+        client = httpx.AsyncClient()
+        source = source_cls(client)
+        overview = await source.get_market_overview()
+        assert overview is not None
+        assert overview.market == market_enum
+        assert overview.authority_name
+        assert len(overview.key_legislation) >= 1
+
+    @pytest.mark.asyncio
+    async def test_search_calcium_returns_results(self, source_cls, market_enum, known_std):
+        client = httpx.AsyncClient()
+        source = source_cls(client)
+        results = await source.search_health_claims("calcium")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_search_standards_non_empty(self, source_cls, market_enum, known_std):
+        client = httpx.AsyncClient()
+        source = source_cls(client)
+        results = await source.search_standards("")
+        assert isinstance(results, list)
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_get_known_standard(self, source_cls, market_enum, known_std):
+        client = httpx.AsyncClient()
+        source = source_cls(client)
+        standard = await source.get_standard(known_std)
+        assert standard is not None
+        assert standard.market == market_enum
+        assert standard.title
+
+    @pytest.mark.asyncio
+    async def test_unknown_ingredient_no_crash(self, source_cls, market_enum, known_std):
+        client = httpx.AsyncClient()
+        source = source_cls(client)
+        results = await source.search_health_claims("xylobiose_fictional_ingredient_xyz")
+        assert isinstance(results, list)

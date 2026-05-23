@@ -20,9 +20,11 @@ from __future__ import annotations
 import time
 from bs4 import BeautifulSoup
 from mcp_food_regulatory.models import (
-    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis
+    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis,
+    NutrientClaimThreshold, RegulatoryUpdate,
 )
 from mcp_food_regulatory.sources.base import RegulatorySource
+from mcp_food_regulatory.sources.regulatory_updates_seed import get_seeded_updates
 
 _BASE_URL = "https://www.fld.caa.go.jp"
 _FOSHU_URL = "https://www.fld.caa.go.jp/caaks/cssc01/"
@@ -104,6 +106,79 @@ _KNOWN_STANDARDS: dict[str, dict] = {
         "full_text_url": "https://www.caa.go.jp/policies/policy/food_labeling/health_promotion/",
     },
 }
+
+
+# Japan nutrient content claim thresholds -- Food Labelling Standards (食品表示基準) 2015
+# Chapter 2, Article 7 + Appendix tables for nutrient claims
+# Verified against Cabinet Office Order No. 10 (2015) as amended to 2023
+_JP_CLAIM_THRESHOLDS: list[dict] = [
+    # --- Dietary fibre ---
+    {"nutrient": "dietary fibre", "claim_type": "source_of", "claim_wording": "含む/入り (Contains dietary fibre)",
+     "threshold_value": "≥3g/100g (solid) or ≥1.5g/100ml (liquid) or ≥1.5g/serving",
+     "threshold_basis": "per 100g, per 100ml, or per serving",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "dietary fibre", "claim_type": "high_in", "claim_wording": "高い/豊富 (High in dietary fibre)",
+     "threshold_value": "≥6g/100g (solid) or ≥3g/100ml (liquid) or ≥3g/serving",
+     "threshold_basis": "per 100g, per 100ml, or per serving",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    # --- Protein ---
+    {"nutrient": "protein", "claim_type": "source_of", "claim_wording": "含む/入り (Contains protein)",
+     "threshold_value": "≥8.1g/100g (solid) or ≥4.1g/100ml (liquid) or ≥4.1g/serving",
+     "threshold_basis": "per 100g, per 100ml, or per serving",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "protein", "claim_type": "high_in", "claim_wording": "高い/豊富 (High in protein)",
+     "threshold_value": "≥16.2g/100g (solid) or ≥8.1g/100ml (liquid) or ≥8.1g/serving",
+     "threshold_basis": "per 100g, per 100ml, or per serving",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    # --- Fat ---
+    {"nutrient": "fat", "claim_type": "low", "claim_wording": "低い (Low fat)",
+     "threshold_value": "≤3g/100g (solid) or ≤1.5g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "fat", "claim_type": "free", "claim_wording": "含まない (Fat free / No fat)",
+     "threshold_value": "≤0.5g/100g or ≤0.5g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "fat", "claim_type": "reduced", "claim_wording": "控えめ (Reduced fat)",
+     "threshold_value": "≥25% less fat than comparable product", "threshold_basis": "compared to reference",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    # --- Saturated fat ---
+    {"nutrient": "saturated fat", "claim_type": "low", "claim_wording": "低い (Low saturated fat)",
+     "threshold_value": "≤1.5g/100g (solid) or ≤0.75g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "saturated fat", "claim_type": "free", "claim_wording": "含まない (Saturated fat free)",
+     "threshold_value": "≤0.1g/100g or ≤0.1g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    # --- Sugars ---
+    {"nutrient": "sugars", "claim_type": "low", "claim_wording": "低い (Low sugar)",
+     "threshold_value": "≤5g/100g (solid) or ≤2.5g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "sugars", "claim_type": "free", "claim_wording": "含まない (Sugar free / No sugar)",
+     "threshold_value": "≤0.5g/100g or ≤0.5g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    # --- Sodium ---
+    {"nutrient": "sodium", "claim_type": "low", "claim_wording": "低い (Low sodium / Low salt)",
+     "threshold_value": "≤120mg/100g or ≤60mg/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "sodium", "claim_type": "free", "claim_wording": "含まない (Sodium free / No sodium)",
+     "threshold_value": "≤5mg/100g or ≤5mg/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "sodium", "claim_type": "reduced", "claim_wording": "控えめ (Reduced sodium)",
+     "threshold_value": "≥25% less sodium than comparable product", "threshold_basis": "compared to reference",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    # --- Energy ---
+    {"nutrient": "energy", "claim_type": "low", "claim_wording": "低い (Low calorie)",
+     "threshold_value": "≤100kcal/100g (solid) or ≤20kcal/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "energy", "claim_type": "free", "claim_wording": "含まない (Calorie free / No calorie)",
+     "threshold_value": "≤5kcal/100g or ≤5kcal/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+    {"nutrient": "energy", "claim_type": "reduced", "claim_wording": "控えめ (Reduced calorie)",
+     "threshold_value": "≥25% less energy than comparable product", "threshold_basis": "compared to reference",
+     "governing_instrument": "Food Labelling Standards 2015, Appendix Table 12", "verified_date": "2023-12"},
+]
 
 
 class JPCAASource(RegulatorySource):
@@ -239,6 +314,36 @@ class JPCAASource(RegulatorySource):
             Standard(standard_id=k, market=Market.JP, **v)
             for k, v in _KNOWN_STANDARDS.items()
         ]
+
+    async def get_regulatory_updates(
+        self,
+        since_date: str | None = None,
+    ) -> list[RegulatoryUpdate]:
+        """Return seeded Japan regulatory updates, optionally filtered by date."""
+        return get_seeded_updates(Market.JP, since_date)
+
+    async def get_nutrient_claim_thresholds(
+        self,
+        nutrient: str | None = None,
+    ) -> list[NutrientClaimThreshold]:
+        """Return Japan nutrient content claim thresholds from Food Labelling Standards 2015."""
+        results = []
+        for t in _JP_CLAIM_THRESHOLDS:
+            if nutrient is None or nutrient.lower() in t["nutrient"].lower():
+                results.append(NutrientClaimThreshold(
+                    market=Market.JP,
+                    nutrient=t["nutrient"],
+                    claim_type=t["claim_type"],
+                    claim_wording=t["claim_wording"],
+                    threshold_value=t["threshold_value"],
+                    threshold_basis=t["threshold_basis"],
+                    reference_value=t.get("reference_value"),
+                    conditions=t.get("conditions"),
+                    governing_instrument=t["governing_instrument"],
+                    data_confidence="seeded",
+                    verified_date=t.get("verified_date"),
+                ))
+        return results
 
     async def get_market_overview(self) -> MarketOverview:
         return MarketOverview(

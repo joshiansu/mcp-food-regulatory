@@ -20,9 +20,11 @@ from __future__ import annotations
 import time
 from bs4 import BeautifulSoup
 from mcp_food_regulatory.models import (
-    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis
+    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis,
+    NutrientClaimThreshold, RegulatoryUpdate,
 )
 from mcp_food_regulatory.sources.base import RegulatorySource
+from mcp_food_regulatory.sources.regulatory_updates_seed import get_seeded_updates
 
 _BASE_URL = "https://www.canada.ca"
 _DRRC_URL = (
@@ -74,6 +76,92 @@ _KNOWN_STANDARDS: dict[str, dict] = {
         "full_text_url": "https://laws-lois.justice.gc.ca/eng/acts/f-27/",
     },
 }
+
+
+# Canada nutrient content claim thresholds -- Food and Drug Regulations (FDR) B.01.300-B.01.513
+# Verified against Health Canada Guidance on Nutrient Content Claims (2022)
+_CA_CLAIM_THRESHOLDS: list[dict] = [
+    # --- Dietary fibre ---
+    {"nutrient": "dietary fibre", "claim_type": "source_of", "claim_wording": "Source of fibre",
+     "threshold_value": "≥2g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500 + Health Canada Guidance 2022", "verified_date": "2023-12"},
+    {"nutrient": "dietary fibre", "claim_type": "source_of", "claim_wording": "High source of fibre",
+     "threshold_value": "≥4g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500 + Health Canada Guidance 2022", "verified_date": "2023-12"},
+    {"nutrient": "dietary fibre", "claim_type": "high_in", "claim_wording": "Very high source of fibre",
+     "threshold_value": "≥6g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500 + Health Canada Guidance 2022", "verified_date": "2023-12"},
+    # --- Protein ---
+    {"nutrient": "protein", "claim_type": "source_of", "claim_wording": "Source of protein",
+     "threshold_value": "≥7.5g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500 + Health Canada Guidance 2022", "verified_date": "2023-12"},
+    {"nutrient": "protein", "claim_type": "high_in", "claim_wording": "High in protein / Excellent source of protein",
+     "threshold_value": "≥15g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500 + Health Canada Guidance 2022", "verified_date": "2023-12"},
+    # --- Fat ---
+    {"nutrient": "fat", "claim_type": "low", "claim_wording": "Low in fat",
+     "threshold_value": "≤3g/serving (solid) or ≤1.5g/100ml (liquid)",
+     "threshold_basis": "per serving or per 100ml",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    {"nutrient": "fat", "claim_type": "free", "claim_wording": "Fat free",
+     "threshold_value": "≤0.5g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    {"nutrient": "fat", "claim_type": "reduced", "claim_wording": "Reduced in fat",
+     "threshold_value": "≥25% less fat than reference food", "threshold_basis": "compared to reference",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    # --- Saturated fat ---
+    {"nutrient": "saturated fat", "claim_type": "low", "claim_wording": "Low in saturated fatty acids",
+     "threshold_value": "≤2g total saturated + trans fatty acids/serving; ≤15% total energy from sat + trans",
+     "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    {"nutrient": "saturated fat", "claim_type": "free", "claim_wording": "Saturated fatty acid free",
+     "threshold_value": "≤0.1g saturated + trans fatty acids/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    # --- Sugars ---
+    {"nutrient": "sugars", "claim_type": "free", "claim_wording": "Sugar free / Free of sugar",
+     "threshold_value": "≤0.5g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    {"nutrient": "sugars", "claim_type": "reduced", "claim_wording": "Reduced in sugars",
+     "threshold_value": "≥25% less sugars than reference food", "threshold_basis": "compared to reference",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    {"nutrient": "sugars", "claim_type": "no_added", "claim_wording": "No added sugars",
+     "threshold_value": "No added sugars, syrup, or concentrated fruit juice used as a sweetening agent",
+     "threshold_basis": "n/a",
+     "conditions": "Product must contain no more sugars than the reference food",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    # --- Sodium ---
+    {"nutrient": "sodium", "claim_type": "low", "claim_wording": "Low in sodium",
+     "threshold_value": "≤140mg/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    {"nutrient": "sodium", "claim_type": "free", "claim_wording": "Sodium free / Salt free",
+     "threshold_value": "≤5mg/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    {"nutrient": "sodium", "claim_type": "reduced", "claim_wording": "Reduced in sodium",
+     "threshold_value": "≥25% less sodium than reference food", "threshold_basis": "compared to reference",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    # --- Energy ---
+    {"nutrient": "energy", "claim_type": "low", "claim_wording": "Low energy / Low calorie",
+     "threshold_value": "≤40kcal/serving (solid) or ≤20kcal/100ml (liquid)",
+     "threshold_basis": "per serving or per 100ml",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    {"nutrient": "energy", "claim_type": "free", "claim_wording": "Calorie free / Energy free",
+     "threshold_value": "≤5kcal/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    {"nutrient": "energy", "claim_type": "reduced", "claim_wording": "Reduced energy / Reduced calorie",
+     "threshold_value": "≥25% less energy than reference food", "threshold_basis": "compared to reference",
+     "governing_instrument": "FDR B.01.500", "verified_date": "2023-12"},
+    # --- Vitamins and minerals ---
+    {"nutrient": "vitamins_minerals", "claim_type": "source_of",
+     "claim_wording": "Source of [vitamin/mineral]",
+     "threshold_value": "≥5% DV per serving", "threshold_basis": "per serving",
+     "reference_value": "DV per Health Canada Reference Daily Intakes (RDI)",
+     "governing_instrument": "FDR B.01.500 + Health Canada DRI tables", "verified_date": "2023-12"},
+    {"nutrient": "vitamins_minerals", "claim_type": "high_in",
+     "claim_wording": "High in [vitamin/mineral] / Excellent source of [vitamin/mineral]",
+     "threshold_value": "≥15% DV per serving", "threshold_basis": "per serving",
+     "reference_value": "DV per Health Canada Reference Daily Intakes (RDI)",
+     "governing_instrument": "FDR B.01.500 + Health Canada DRI tables", "verified_date": "2023-12"},
+]
 
 
 class CAHealthCanadaSource(RegulatorySource):
@@ -202,6 +290,36 @@ class CAHealthCanadaSource(RegulatorySource):
             Standard(standard_id=k, market=Market.CA, **v)
             for k, v in _KNOWN_STANDARDS.items()
         ]
+
+    async def get_regulatory_updates(
+        self,
+        since_date: str | None = None,
+    ) -> list[RegulatoryUpdate]:
+        """Return seeded Canada regulatory updates, optionally filtered by date."""
+        return get_seeded_updates(Market.CA, since_date)
+
+    async def get_nutrient_claim_thresholds(
+        self,
+        nutrient: str | None = None,
+    ) -> list[NutrientClaimThreshold]:
+        """Return Canada nutrient content claim thresholds from Food and Drug Regulations."""
+        results = []
+        for t in _CA_CLAIM_THRESHOLDS:
+            if nutrient is None or nutrient.lower() in t["nutrient"].lower():
+                results.append(NutrientClaimThreshold(
+                    market=Market.CA,
+                    nutrient=t["nutrient"],
+                    claim_type=t["claim_type"],
+                    claim_wording=t["claim_wording"],
+                    threshold_value=t["threshold_value"],
+                    threshold_basis=t["threshold_basis"],
+                    reference_value=t.get("reference_value"),
+                    conditions=t.get("conditions"),
+                    governing_instrument=t["governing_instrument"],
+                    data_confidence="seeded",
+                    verified_date=t.get("verified_date"),
+                ))
+        return results
 
     async def get_market_overview(self) -> MarketOverview:
         return MarketOverview(

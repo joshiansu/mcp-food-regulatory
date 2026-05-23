@@ -20,9 +20,11 @@ from __future__ import annotations
 import time
 from bs4 import BeautifulSoup
 from mcp_food_regulatory.models import (
-    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis
+    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis,
+    NutrientClaimThreshold, RegulatoryUpdate,
 )
 from mcp_food_regulatory.sources.base import RegulatorySource
+from mcp_food_regulatory.sources.regulatory_updates_seed import get_seeded_updates
 
 _BASE_URL = "https://www.fda.gov"
 _AUTHORIZED_URL = (
@@ -74,6 +76,100 @@ _KNOWN_STANDARDS: dict[str, dict] = {
         "full_text_url": "https://www.fda.gov/regulatory-information/selected-amendments-fdc-act/fda-modernization-act-1997",
     },
 }
+
+
+# US nutrient content claim thresholds -- 21 CFR Part 101 Subpart D
+# Verified against 21 CFR 101.54-101.67 and FDA guidance (2023)
+_US_CLAIM_THRESHOLDS: list[dict] = [
+    # --- Dietary fibre ---
+    {"nutrient": "dietary fibre", "claim_type": "source_of", "claim_wording": "Good source of fiber",
+     "threshold_value": "≥10% DV per serving (≥2.5g)", "threshold_basis": "per serving",
+     "reference_value": "DV = 28g (FDA 2020 DRV)", "governing_instrument": "21 CFR 101.54(d)",
+     "verified_date": "2023-12"},
+    {"nutrient": "dietary fibre", "claim_type": "high_in", "claim_wording": "Excellent source of fiber / High fiber",
+     "threshold_value": "≥20% DV per serving (≥5.6g)", "threshold_basis": "per serving",
+     "reference_value": "DV = 28g (FDA 2020 DRV)", "governing_instrument": "21 CFR 101.54(b)",
+     "verified_date": "2023-12"},
+    # --- Protein ---
+    {"nutrient": "protein", "claim_type": "source_of", "claim_wording": "Good source of protein",
+     "threshold_value": "≥10% DV per serving", "threshold_basis": "per serving",
+     "reference_value": "DV = 50g (FDA 2020 DRV)", "governing_instrument": "21 CFR 101.54(d)",
+     "verified_date": "2023-12"},
+    {"nutrient": "protein", "claim_type": "high_in", "claim_wording": "High protein / Excellent source of protein",
+     "threshold_value": "≥20% DV per serving", "threshold_basis": "per serving",
+     "reference_value": "DV = 50g (FDA 2020 DRV)", "governing_instrument": "21 CFR 101.54(b)",
+     "verified_date": "2023-12"},
+    # --- Fat ---
+    {"nutrient": "fat", "claim_type": "low", "claim_wording": "Low fat",
+     "threshold_value": "≤3g/serving and ≤30% calories from fat", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.62(b)", "verified_date": "2023-12"},
+    {"nutrient": "fat", "claim_type": "free", "claim_wording": "Fat free",
+     "threshold_value": "<0.5g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.62(b)", "verified_date": "2023-12"},
+    {"nutrient": "fat", "claim_type": "reduced", "claim_wording": "Reduced fat",
+     "threshold_value": "≥25% less fat per serving than reference food", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.62(b)", "verified_date": "2023-12"},
+    # --- Saturated fat ---
+    {"nutrient": "saturated fat", "claim_type": "low", "claim_wording": "Low saturated fat",
+     "threshold_value": "≤1g/serving and ≤15% calories from saturated fat", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.62(c)", "verified_date": "2023-12"},
+    {"nutrient": "saturated fat", "claim_type": "free", "claim_wording": "Saturated fat free",
+     "threshold_value": "<0.5g/serving and <0.5g trans fat/serving", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.62(c)", "verified_date": "2023-12"},
+    # --- Sugars ---
+    {"nutrient": "sugars", "claim_type": "free", "claim_wording": "Sugar free",
+     "threshold_value": "<0.5g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.60(c)", "verified_date": "2023-12"},
+    {"nutrient": "sugars", "claim_type": "reduced", "claim_wording": "Reduced sugar",
+     "threshold_value": "≥25% less sugar per serving than reference food", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.60(c)", "verified_date": "2023-12"},
+    {"nutrient": "sugars", "claim_type": "no_added", "claim_wording": "No added sugars",
+     "threshold_value": "No sugars or sugar-containing ingredient added during processing",
+     "threshold_basis": "n/a",
+     "conditions": "Must also not exceed the reference amount for sugars",
+     "governing_instrument": "21 CFR 101.60(c)(2)", "verified_date": "2023-12"},
+    # --- Sodium ---
+    {"nutrient": "sodium", "claim_type": "low", "claim_wording": "Low sodium",
+     "threshold_value": "≤140mg/serving", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.61(b)", "verified_date": "2023-12"},
+    {"nutrient": "sodium", "claim_type": "free", "claim_wording": "Sodium free / Salt free",
+     "threshold_value": "<5mg/serving", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.61(b)", "verified_date": "2023-12"},
+    {"nutrient": "sodium", "claim_type": "reduced", "claim_wording": "Reduced sodium",
+     "threshold_value": "≥25% less sodium per serving than reference food", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.61(b)", "verified_date": "2023-12"},
+    {"nutrient": "sodium", "claim_type": "low", "claim_wording": "Very low sodium",
+     "threshold_value": "≤35mg/serving", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.61(b)", "verified_date": "2023-12"},
+    # --- Calories ---
+    {"nutrient": "energy", "claim_type": "low", "claim_wording": "Low calorie",
+     "threshold_value": "≤40kcal/serving (solid) or ≤40kcal/240ml (liquid)", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.60(b)", "verified_date": "2023-12"},
+    {"nutrient": "energy", "claim_type": "free", "claim_wording": "Calorie free / Zero calories",
+     "threshold_value": "<5kcal/serving", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.60(b)", "verified_date": "2023-12"},
+    {"nutrient": "energy", "claim_type": "reduced", "claim_wording": "Reduced calorie",
+     "threshold_value": "≥25% fewer calories than reference food", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.60(b)", "verified_date": "2023-12"},
+    # --- Cholesterol ---
+    {"nutrient": "cholesterol", "claim_type": "low", "claim_wording": "Low cholesterol",
+     "threshold_value": "≤20mg/serving and ≤2g saturated fat/serving", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.62(d)", "verified_date": "2023-12"},
+    {"nutrient": "cholesterol", "claim_type": "free", "claim_wording": "Cholesterol free",
+     "threshold_value": "<2mg/serving and ≤2g saturated fat/serving", "threshold_basis": "per serving",
+     "governing_instrument": "21 CFR 101.62(d)", "verified_date": "2023-12"},
+    # --- Vitamins and minerals ---
+    {"nutrient": "vitamins_minerals", "claim_type": "source_of",
+     "claim_wording": "Good source of [vitamin/mineral]",
+     "threshold_value": "≥10% DV per serving", "threshold_basis": "per serving",
+     "reference_value": "DV per FDA 2020 DRVs", "governing_instrument": "21 CFR 101.54(d)",
+     "verified_date": "2023-12"},
+    {"nutrient": "vitamins_minerals", "claim_type": "high_in",
+     "claim_wording": "High in [vitamin/mineral] / Excellent source of [vitamin/mineral]",
+     "threshold_value": "≥20% DV per serving", "threshold_basis": "per serving",
+     "reference_value": "DV per FDA 2020 DRVs", "governing_instrument": "21 CFR 101.54(b)",
+     "verified_date": "2023-12"},
+]
 
 
 class USFDASource(RegulatorySource):
@@ -208,6 +304,36 @@ class USFDASource(RegulatorySource):
             Standard(standard_id=k, market=Market.US, **v)
             for k, v in _KNOWN_STANDARDS.items()
         ]
+
+    async def get_regulatory_updates(
+        self,
+        since_date: str | None = None,
+    ) -> list[RegulatoryUpdate]:
+        """Return seeded US regulatory updates, optionally filtered by date."""
+        return get_seeded_updates(Market.US, since_date)
+
+    async def get_nutrient_claim_thresholds(
+        self,
+        nutrient: str | None = None,
+    ) -> list[NutrientClaimThreshold]:
+        """Return US FDA nutrient content claim thresholds from 21 CFR Part 101."""
+        results = []
+        for t in _US_CLAIM_THRESHOLDS:
+            if nutrient is None or nutrient.lower() in t["nutrient"].lower():
+                results.append(NutrientClaimThreshold(
+                    market=Market.US,
+                    nutrient=t["nutrient"],
+                    claim_type=t["claim_type"],
+                    claim_wording=t["claim_wording"],
+                    threshold_value=t["threshold_value"],
+                    threshold_basis=t["threshold_basis"],
+                    reference_value=t.get("reference_value"),
+                    conditions=t.get("conditions"),
+                    governing_instrument=t["governing_instrument"],
+                    data_confidence="seeded",
+                    verified_date=t.get("verified_date"),
+                ))
+        return results
 
     async def get_market_overview(self) -> MarketOverview:
         return MarketOverview(

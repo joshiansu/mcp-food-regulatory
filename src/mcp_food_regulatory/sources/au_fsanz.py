@@ -18,9 +18,11 @@ from __future__ import annotations
 import time
 from bs4 import BeautifulSoup
 from mcp_food_regulatory.models import (
-    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis
+    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis,
+    NutrientClaimThreshold, RegulatoryUpdate,
 )
 from mcp_food_regulatory.sources.base import RegulatorySource
+from mcp_food_regulatory.sources.regulatory_updates_seed import get_seeded_updates
 
 _BASE_URL = "https://www.foodstandards.gov.au"
 _STD127_URL = "https://www.legislation.gov.au/Series/F2015L00411"
@@ -80,6 +82,92 @@ _KNOWN_STANDARDS: dict[str, dict] = {
         "full_text_url": "https://www.legislation.gov.au/Series/C2004A04182",
     },
 }
+
+
+# AU/NZ nutrient content claim thresholds -- FSANZ Standard 1.2.7 (Food Standards Code)
+# Verified against Standard 1.2.7 Amendment 155 (2021)
+_AU_CLAIM_THRESHOLDS: list[dict] = [
+    # --- Dietary fibre ---
+    {"nutrient": "dietary fibre", "claim_type": "source_of", "claim_wording": "Source of dietary fibre",
+     "threshold_value": "≥2g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 6", "verified_date": "2024-01"},
+    {"nutrient": "dietary fibre", "claim_type": "source_of", "claim_wording": "Good source of dietary fibre",
+     "threshold_value": "≥4g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 6", "verified_date": "2024-01"},
+    {"nutrient": "dietary fibre", "claim_type": "high_in", "claim_wording": "Excellent source of fibre / High fibre",
+     "threshold_value": "≥7g/serving", "threshold_basis": "per serving",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 6", "verified_date": "2024-01"},
+    # --- Protein ---
+    {"nutrient": "protein", "claim_type": "source_of", "claim_wording": "Good source of protein",
+     "threshold_value": "≥10g/serving and ≥5% energy from protein", "threshold_basis": "per serving",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 6", "verified_date": "2024-01"},
+    {"nutrient": "protein", "claim_type": "high_in", "claim_wording": "High in protein / Excellent source of protein",
+     "threshold_value": "≥20g/serving and ≥10% energy from protein", "threshold_basis": "per serving",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 6", "verified_date": "2024-01"},
+    # --- Fat ---
+    {"nutrient": "fat", "claim_type": "low", "claim_wording": "Low fat",
+     "threshold_value": "≤3g/100g (solid) or ≤1.5g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    {"nutrient": "fat", "claim_type": "free", "claim_wording": "Fat free",
+     "threshold_value": "≤0.15g/100g or ≤0.15g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    {"nutrient": "fat", "claim_type": "reduced", "claim_wording": "Reduced fat",
+     "threshold_value": "≥25% less fat than comparable food", "threshold_basis": "compared to reference",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    # --- Saturated fat ---
+    {"nutrient": "saturated fat", "claim_type": "low", "claim_wording": "Low saturated fat",
+     "threshold_value": "≤1.5g/100g (solid) or ≤0.75g/100ml (liquid); sat fat ≤10% total fat",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    {"nutrient": "saturated fat", "claim_type": "free", "claim_wording": "Saturated fat free",
+     "threshold_value": "≤0.1g/100g or ≤0.1g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    # --- Sugars ---
+    {"nutrient": "sugars", "claim_type": "low", "claim_wording": "Low sugar",
+     "threshold_value": "≤5g/100g (solid) or ≤2.5g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    {"nutrient": "sugars", "claim_type": "free", "claim_wording": "Sugar free",
+     "threshold_value": "≤0.5g/100g or ≤0.5g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    {"nutrient": "sugars", "claim_type": "no_added", "claim_wording": "No added sugar",
+     "threshold_value": "No added sugars or concentrated juices/syrups used as sweetening agents",
+     "threshold_basis": "n/a",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    # --- Sodium ---
+    {"nutrient": "sodium", "claim_type": "low", "claim_wording": "Low sodium",
+     "threshold_value": "≤120mg/100g", "threshold_basis": "per 100g",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    {"nutrient": "sodium", "claim_type": "free", "claim_wording": "Sodium free / Salt free",
+     "threshold_value": "≤5mg/100g", "threshold_basis": "per 100g",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    {"nutrient": "sodium", "claim_type": "reduced", "claim_wording": "Reduced sodium",
+     "threshold_value": "≥25% less sodium than comparable food", "threshold_basis": "compared to reference",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    # --- Energy ---
+    {"nutrient": "energy", "claim_type": "low", "claim_wording": "Low energy / Light / Lite",
+     "threshold_value": "≤170kJ/100g (solid) or ≤80kJ/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    {"nutrient": "energy", "claim_type": "free", "claim_wording": "Energy free",
+     "threshold_value": "≤40kJ/100g or ≤40kJ/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    {"nutrient": "energy", "claim_type": "reduced", "claim_wording": "Reduced energy",
+     "threshold_value": "≥25% less energy than comparable food", "threshold_basis": "compared to reference",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 4", "verified_date": "2024-01"},
+    # --- Vitamins and minerals ---
+    {"nutrient": "vitamins_minerals", "claim_type": "source_of",
+     "claim_wording": "Source of / Contains [vitamin/mineral]",
+     "threshold_value": "≥10% RDI per serving", "threshold_basis": "per serving",
+     "reference_value": "RDI per FSANZ Standard 1.5.1 and Schedule 1",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 6", "verified_date": "2024-01"},
+    {"nutrient": "vitamins_minerals", "claim_type": "high_in",
+     "claim_wording": "Good source of / High in [vitamin/mineral]",
+     "threshold_value": "≥25% RDI per serving", "threshold_basis": "per serving",
+     "reference_value": "RDI per FSANZ Standard 1.5.1 and Schedule 1",
+     "governing_instrument": "FSANZ Standard 1.2.7 Schedule 6", "verified_date": "2024-01"},
+]
 
 
 class AUFSANZSource(RegulatorySource):
@@ -202,6 +290,36 @@ class AUFSANZSource(RegulatorySource):
             Standard(standard_id=k, market=Market.AU, **v)
             for k, v in _KNOWN_STANDARDS.items()
         ]
+
+    async def get_regulatory_updates(
+        self,
+        since_date: str | None = None,
+    ) -> list[RegulatoryUpdate]:
+        """Return seeded AU regulatory updates, optionally filtered by date."""
+        return get_seeded_updates(Market.AU, since_date)
+
+    async def get_nutrient_claim_thresholds(
+        self,
+        nutrient: str | None = None,
+    ) -> list[NutrientClaimThreshold]:
+        """Return AU/NZ nutrient content claim thresholds from FSANZ Standard 1.2.7."""
+        results = []
+        for t in _AU_CLAIM_THRESHOLDS:
+            if nutrient is None or nutrient.lower() in t["nutrient"].lower():
+                results.append(NutrientClaimThreshold(
+                    market=Market.AU,
+                    nutrient=t["nutrient"],
+                    claim_type=t["claim_type"],
+                    claim_wording=t["claim_wording"],
+                    threshold_value=t["threshold_value"],
+                    threshold_basis=t["threshold_basis"],
+                    reference_value=t.get("reference_value"),
+                    conditions=t.get("conditions"),
+                    governing_instrument=t["governing_instrument"],
+                    data_confidence="seeded",
+                    verified_date=t.get("verified_date"),
+                ))
+        return results
 
     async def get_market_overview(self) -> MarketOverview:
         return MarketOverview(

@@ -13,7 +13,8 @@ Strategy:
 
 from __future__ import annotations
 from mcp_food_regulatory.models import (
-    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis
+    Market, ClaimResult, ClaimStatus, Standard, MarketOverview, RegulatoryBasis,
+    NutrientClaimThreshold,
 )
 from mcp_food_regulatory.sources.base import RegulatorySource
 
@@ -139,6 +140,94 @@ _CLAIM_PROVISIONS: dict[str, list[dict]] = {
 }
 
 
+# India nutrient content claim thresholds -- FSSAI (Advertising and Claims) Regulations 2018
+# Schedule I (nutrition claims) + FSS (Labelling and Display) Regulations 2020, Annexure A
+# Verified against FSSAI gazette notifications (2018, 2020)
+_IN_CLAIM_THRESHOLDS: list[dict] = [
+    # --- Dietary fibre ---
+    {"nutrient": "dietary fibre", "claim_type": "source_of", "claim_wording": "Good source of fibre / Contains fibre",
+     "threshold_value": "≥3g/100g (solid) or ≥1.5g/100ml (liquid) or ≥3g/serving",
+     "threshold_basis": "per 100g, per 100ml, or per serving",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "dietary fibre", "claim_type": "high_in", "claim_wording": "High in fibre",
+     "threshold_value": "≥6g/100g (solid) or ≥3g/100ml (liquid) or ≥6g/serving",
+     "threshold_basis": "per 100g, per 100ml, or per serving",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    # --- Protein ---
+    {"nutrient": "protein", "claim_type": "source_of", "claim_wording": "Good source of protein",
+     "threshold_value": "≥10g/100g (solid) or ≥5g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "protein", "claim_type": "high_in", "claim_wording": "High in protein",
+     "threshold_value": "≥20g/100g (solid) or ≥10g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    # --- Fat ---
+    {"nutrient": "fat", "claim_type": "low", "claim_wording": "Low fat",
+     "threshold_value": "≤3g/100g (solid) or ≤1.5g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "fat", "claim_type": "free", "claim_wording": "Fat free",
+     "threshold_value": "≤0.5g/100g or ≤0.5g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "fat", "claim_type": "reduced", "claim_wording": "Reduced fat",
+     "threshold_value": "≥25% less fat than comparable product", "threshold_basis": "compared to reference",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    # --- Saturated fat ---
+    {"nutrient": "saturated fat", "claim_type": "low", "claim_wording": "Low saturated fat",
+     "threshold_value": "≤1.5g/100g (solid) or ≤0.75g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "saturated fat", "claim_type": "free", "claim_wording": "Saturated fat free",
+     "threshold_value": "≤0.1g/100g or ≤0.1g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    # --- Sugars ---
+    {"nutrient": "sugars", "claim_type": "low", "claim_wording": "Low sugar",
+     "threshold_value": "≤5g/100g (solid) or ≤2.5g/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "sugars", "claim_type": "free", "claim_wording": "Sugar free",
+     "threshold_value": "≤0.5g/100g or ≤0.5g/100ml", "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "sugars", "claim_type": "no_added", "claim_wording": "No added sugar",
+     "threshold_value": "No added sugars including honey, syrups, malt extract, or fruit concentrates",
+     "threshold_basis": "n/a",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    # --- Sodium ---
+    {"nutrient": "sodium", "claim_type": "low", "claim_wording": "Low sodium",
+     "threshold_value": "≤120mg/100g", "threshold_basis": "per 100g",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "sodium", "claim_type": "free", "claim_wording": "Sodium free / Salt free",
+     "threshold_value": "≤5mg/100g", "threshold_basis": "per 100g",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "sodium", "claim_type": "reduced", "claim_wording": "Reduced sodium",
+     "threshold_value": "≥25% less sodium than comparable product", "threshold_basis": "compared to reference",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    # --- Energy ---
+    {"nutrient": "energy", "claim_type": "low", "claim_wording": "Low energy / Low calorie",
+     "threshold_value": "≤40kcal/100g (solid) or ≤20kcal/100ml (liquid)",
+     "threshold_basis": "per 100g or per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "energy", "claim_type": "free", "claim_wording": "Energy free / Calorie free",
+     "threshold_value": "≤4kcal/100ml (liquids only)", "threshold_basis": "per 100ml",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "energy", "claim_type": "reduced", "claim_wording": "Reduced energy",
+     "threshold_value": "≥25% less energy than comparable product", "threshold_basis": "compared to reference",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    # --- Vitamins and minerals ---
+    {"nutrient": "vitamins_minerals", "claim_type": "source_of",
+     "claim_wording": "Source of / Good source of [vitamin/mineral]",
+     "threshold_value": "≥15% RDA per 100g or per serving", "threshold_basis": "per 100g or per serving",
+     "reference_value": "RDA per ICMR-NIN 2020 Dietary Reference Values",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+    {"nutrient": "vitamins_minerals", "claim_type": "high_in",
+     "claim_wording": "High in [vitamin/mineral] / Rich in [vitamin/mineral]",
+     "threshold_value": "≥30% RDA per 100g or per serving", "threshold_basis": "per 100g or per serving",
+     "reference_value": "RDA per ICMR-NIN 2020 Dietary Reference Values",
+     "governing_instrument": "FSSAI Claims Regulations 2018 Schedule I", "verified_date": "2024-01"},
+]
+
+
 class INFSSAISource(RegulatorySource):
     """FSSAI data source for India."""
 
@@ -206,6 +295,29 @@ class INFSSAISource(RegulatorySource):
             for k, v in _KNOWN_STANDARDS.items()
             if q in k.lower() or q in v["title"].lower() or q in (v.get("summary") or "").lower()
         ] or [Standard(standard_id=k, market=Market.IN, **v) for k, v in _KNOWN_STANDARDS.items()]
+
+    async def get_nutrient_claim_thresholds(
+        self,
+        nutrient: str | None = None,
+    ) -> list[NutrientClaimThreshold]:
+        """Return India nutrient content claim thresholds from FSSAI Claims Regulations 2018."""
+        results = []
+        for t in _IN_CLAIM_THRESHOLDS:
+            if nutrient is None or nutrient.lower() in t["nutrient"].lower():
+                results.append(NutrientClaimThreshold(
+                    market=Market.IN,
+                    nutrient=t["nutrient"],
+                    claim_type=t["claim_type"],
+                    claim_wording=t["claim_wording"],
+                    threshold_value=t["threshold_value"],
+                    threshold_basis=t["threshold_basis"],
+                    reference_value=t.get("reference_value"),
+                    conditions=t.get("conditions"),
+                    governing_instrument=t["governing_instrument"],
+                    data_confidence="seeded",
+                    verified_date=t.get("verified_date"),
+                ))
+        return results
 
     async def get_market_overview(self) -> MarketOverview:
         return MarketOverview(

@@ -1,13 +1,16 @@
 """
 mcp-food-regulatory: MCP server for food regulatory database access.
 
-Exposes 6 tools to AI agents:
+Exposes 9 tools to AI agents:
   - search_health_claims
   - get_standard
   - search_standards
   - get_additive_status
   - compare_markets
   - get_market_overview
+  - get_nutrient_claim_thresholds
+  - compare_nutrient_claim_thresholds
+  - get_regulatory_updates
 
 Run with:
   uv run mcp-food-regulatory                          # stdio (Claude Desktop)
@@ -25,7 +28,7 @@ from pathlib import Path
 import httpx
 from fastmcp import FastMCP
 
-from mcp_food_regulatory.models import Market
+from mcp_food_regulatory.models import Market, NutrientClaimThreshold, RegulatoryUpdate
 from mcp_food_regulatory.sources.codex import CodexSource
 from mcp_food_regulatory.sources.eu import EUSource
 from mcp_food_regulatory.sources.ph_fda import PhFDASource
@@ -59,9 +62,13 @@ mcp = FastMCP(
     instructions=(
         "This server provides access to food regulatory databases across global markets. "
         "Use it to check health claim status, look up regulatory standards, compare "
-        "claim permissions across markets, and get market regulatory overviews. "
+        "claim permissions across markets, get market regulatory overviews, and look up "
+        "nutrient content claim thresholds (e.g. 'high in protein', 'source of fibre', 'low fat'). "
         "Supported markets: codex, eu, ph, jp, us, ca, au, in, cn, kr, br, co, cl, mx, ae, sa, za, pk, bd, lk, np, bt, mv. "
-        "Use get_market_overview to explore a market. See README for contribution guide."
+        "Use get_market_overview to explore a market. Use get_nutrient_claim_thresholds or "
+        "compare_nutrient_claim_thresholds for label compliance threshold lookups. "
+        "Use get_regulatory_updates to check what changed in a market since a given date. "
+        "See README for contribution guide."
     ),
 )
 
@@ -513,6 +520,222 @@ async def get_market_overview(market: str) -> dict:
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+@mcp.tool
+async def get_regulatory_updates(
+    markets: list[str],
+    since_date: Optional[str] = None,
+) -> dict:
+    """
+    Get known regulatory changes for one or more markets since a given date.
+
+    Answers the question "did something change that affects my product?" -- covering
+    new allergen mandates, banned additives, amended labelling standards, and new legislation.
+
+    Args:
+        markets: List of market codes. Examples: ["us", "eu", "au", "jp", "ca"]
+        since_date: ISO date string (YYYY-MM-DD or YYYY-MM). Only returns changes on or
+                    after this date. Omit to return all known changes.
+                    Examples: "2023-01-01", "2022-06"
+
+    Returns:
+        Dict keyed by market, each containing a list of regulatory updates with:
+        change_type, summary, effective_date, instrument, url.
+
+    Example:
+        get_regulatory_updates(["us"], since_date="2023-01-01")
+        get_regulatory_updates(["eu", "au", "jp"])
+    """
+    results: dict[str, list] = {}
+    errors: dict[str, str] = {}
+    all_updates: list[RegulatoryUpdate] = []
+
+    for market_str in markets:
+        try:
+            market = Market(market_str.lower())
+        except ValueError:
+            errors[market_str] = f"Unknown market '{market_str}'. Available: {', '.join(m.value for m in SOURCES)}"
+            continue
+        try:
+            source = _get_source(market)
+            updates = await source.get_regulatory_updates(since_date)
+            all_updates.extend(updates)
+            results[market_str] = [u.model_dump() for u in updates]
+        except Exception as e:
+            errors[market_str] = f"Error: {e}"
+
+    markets_with_data = [m for m in markets if results.get(m)]
+    markets_no_data = [m for m in markets if m in results and not results[m]]
+    summary_parts = []
+    total = sum(len(v) for v in results.values())
+    if total:
+        summary_parts.append(f"{total} update(s) found across: {', '.join(markets_with_data).upper()}")
+    if markets_no_data:
+        summary_parts.append(f"No updates seeded yet for: {', '.join(markets_no_data).upper()}")
+    if errors:
+        summary_parts.append(f"Errors: {', '.join(errors.keys()).upper()}")
+
+    out = {
+        "since_date": since_date,
+        "results": results,
+        "summary": " | ".join(summary_parts) or "No data found.",
+        "errors": errors if errors else None,
+        "data_note": (
+            "Updates are curated manually from verified official sources. "
+            "Coverage is not exhaustive -- always check the authority website for the latest."
+        ),
+    }
+    asyncio.create_task(_log_call(
+        "get_regulatory_updates",
+        {"markets": markets, "since_date": since_date},
+        out,
+    ))
+    return out
+
+
+@mcp.tool
+async def get_nutrient_claim_thresholds(
+    markets: list[str],
+    nutrient: Optional[str] = None,
+) -> dict:
+    """
+    Get numeric thresholds required to make a nutrient content claim in one or more markets.
+
+    Returns the qualifying threshold (e.g. ≥3g/100g) for claims like 'source of fibre',
+    'high in protein', 'low fat', 'sugar free', 'no added sugars', 'reduced sodium'.
+
+    Args:
+        markets: List of market codes. Examples: ["eu", "us", "au"]
+        nutrient: Optional nutrient filter. Examples: "dietary fibre", "protein", "fat",
+                  "saturated fat", "sugars", "sodium", "energy", "vitamins_minerals".
+                  Omit to return all nutrients for the market.
+
+    Returns:
+        Dict keyed by market, each containing a list of threshold objects with
+        claim wording, threshold values, basis, and governing instrument.
+
+    Example:
+        get_nutrient_claim_thresholds(["eu", "us"], "dietary fibre")
+        get_nutrient_claim_thresholds(["eu"], "protein")
+    """
+    results: dict[str, list] = {}
+    errors: dict[str, str] = {}
+    all_thresholds: list[NutrientClaimThreshold] = []
+
+    for market_str in markets:
+        try:
+            market = Market(market_str.lower())
+        except ValueError:
+            errors[market_str] = f"Unknown market '{market_str}'. Available: {', '.join(m.value for m in SOURCES)}"
+            continue
+        try:
+            source = _get_source(market)
+            thresholds = await source.get_nutrient_claim_thresholds(nutrient)
+            all_thresholds.extend(thresholds)
+            results[market_str] = [t.model_dump() for t in thresholds]
+        except Exception as e:
+            errors[market_str] = f"Error: {e}"
+
+    out = {
+        "nutrient_filter": nutrient,
+        "results": results,
+        "errors": errors if errors else None,
+        "data_note": (
+            "Thresholds are seeded from official regulation text and verified periodically. "
+            "Always confirm against the current regulation before making label claims."
+        ),
+    }
+    asyncio.create_task(_log_call(
+        "get_nutrient_claim_thresholds",
+        {"markets": markets, "nutrient": nutrient},
+        out,
+    ))
+    return out
+
+
+@mcp.tool
+async def compare_nutrient_claim_thresholds(
+    nutrient: str,
+    markets: list[str],
+) -> dict:
+    """
+    Compare nutrient content claim thresholds side-by-side across multiple markets.
+
+    Shows how the same nutrient claim (e.g. 'high in protein') is defined differently
+    in each market -- useful for multi-market product development and label compliance.
+
+    Args:
+        nutrient: Nutrient to compare. Examples: "dietary fibre", "protein", "fat",
+                  "saturated fat", "sugars", "sodium", "energy"
+        markets: List of market codes to compare. Examples: ["eu", "us", "au"]
+
+    Returns:
+        Side-by-side comparison of thresholds per market per claim type,
+        with a plain-language summary of key differences.
+
+    Example:
+        compare_nutrient_claim_thresholds("dietary fibre", ["eu", "us"])
+        compare_nutrient_claim_thresholds("protein", ["eu", "us", "au"])
+    """
+    per_market: dict[str, list] = {}
+    errors: dict[str, str] = {}
+    all_thresholds: list[NutrientClaimThreshold] = []
+
+    for market_str in markets:
+        try:
+            market = Market(market_str.lower())
+        except ValueError:
+            errors[market_str] = f"Unknown market '{market_str}'"
+            continue
+        try:
+            source = _get_source(market)
+            thresholds = await source.get_nutrient_claim_thresholds(nutrient)
+            all_thresholds.extend(thresholds)
+            per_market[market_str] = [t.model_dump() for t in thresholds]
+        except Exception as e:
+            errors[market_str] = f"Error: {e}"
+
+    # Build comparison summary
+    comparison: list[dict] = []
+    claim_types: set[str] = {t.claim_type for t in all_thresholds}
+    for ct in sorted(claim_types):
+        row: dict = {"claim_type": ct}
+        for market_str in markets:
+            entries = [t for t in all_thresholds if t.market.value == market_str and t.claim_type == ct]
+            if entries:
+                row[market_str] = entries[0].threshold_value
+            else:
+                row[market_str] = "not defined"
+        comparison.append(row)
+
+    markets_with_data = [m for m in markets if per_market.get(m)]
+    markets_without = [m for m in markets if not per_market.get(m) and m not in errors]
+    summary_parts = []
+    if markets_with_data:
+        summary_parts.append(f"Thresholds found in: {', '.join(markets_with_data).upper()}")
+    if markets_without:
+        summary_parts.append(f"No threshold data yet for: {', '.join(markets_without).upper()}")
+    if errors:
+        summary_parts.append(f"Errors: {', '.join(errors.keys()).upper()}")
+
+    out = {
+        "nutrient": nutrient,
+        "per_market": per_market,
+        "comparison_table": comparison,
+        "summary": " | ".join(summary_parts) or "No data found.",
+        "errors": errors if errors else None,
+        "data_note": (
+            "Thresholds are seeded from official regulation text. "
+            "Always confirm against the current regulation before making label claims."
+        ),
+    }
+    asyncio.create_task(_log_call(
+        "compare_nutrient_claim_thresholds",
+        {"nutrient": nutrient, "markets": markets},
+        out,
+    ))
+    return out
 
 
 @mcp.tool
